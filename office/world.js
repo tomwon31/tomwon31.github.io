@@ -29,7 +29,9 @@ const cyl = new THREE.CylinderGeometry(1, 1, 1, 10);
 const sphere = new THREE.SphereGeometry(1, 12, 10);
 const plane = new THREE.PlaneGeometry(1, 1);
 const circle = new THREE.CircleGeometry(1, 16);
-const deskTop = new RoundedBoxGeometry(1.46, 0.08, 0.72, 2, 0.1);
+const deskTop = new RoundedBoxGeometry(1.5, 0.09, 0.74, 2, 0.12);
+const chairSeat = new RoundedBoxGeometry(0.48, 0.09, 0.44, 2, 0.04);
+const chairBack = new RoundedBoxGeometry(0.46, 0.5, 0.08, 2, 0.04);
 
 const cache = new Map();
 function mat(color, extras) {
@@ -67,7 +69,22 @@ const C = {
   cafe: mat(0xf3f0ea),
   glass: mat(0xd7e4ea),
   plinth: mat(0x2c313b),
-  shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.14, depthWrite: false }),
+  shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false }),
+  ao: new THREE.MeshBasicMaterial({ color: 0x1c2433, transparent: true, opacity: 0.07, depthWrite: false }),
+  bulb: new THREE.MeshLambertMaterial({ color: 0xfff6e4, emissive: 0xffb45a, emissiveIntensity: 0.05 }),
+  pool: new THREE.MeshBasicMaterial({
+    color: 0xffc98a,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }),
+  steam: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28, depthWrite: false }),
+  mug: mat(0xfff8f2),
+  coffee: mat(0x6b4226),
+  posterA: mat(0xf6d7c3),
+  posterB: mat(0xd7e4f6),
+  keys: mat(0x3c4452),
 };
 
 function canvasTex(w, h, draw) {
@@ -79,6 +96,22 @@ function canvasTex(w, h, draw) {
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+const floorTex = canvasTex(128, 128, (ctx, w, h) => {
+  ctx.fillStyle = '#f3f5f8';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(170, 178, 190, 0.28)';
+  for (let y = 6; y < h; y += 16) {
+    for (let x = 6; x < w; x += 16) ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.strokeStyle = 'rgba(190, 198, 210, 0.55)';
+  ctx.strokeRect(1, 1, w - 2, h - 2);
+});
+floorTex.wrapS = THREE.RepeatWrapping;
+floorTex.wrapT = THREE.RepeatWrapping;
+floorTex.repeat.set(5, 3.5);
+C.floor.map = floorTex;
+C.floor.needsUpdate = true;
 
 const chartTex = canvasTex(160, 96, (ctx, w, h) => {
   ctx.fillStyle = '#f4f7fb';
@@ -139,8 +172,14 @@ function place(geo, material, parent, x, y, z, sx = 1, sy = 1, sz = 1) {
   return mesh;
 }
 
+const crowns = [];
+const lights = [];
+const steams = [];
+
 function shadow(parent, x, z, r) {
-  const mesh = place(circle, C.shadow, parent, x, 0.03, z, r, r, r);
+  const soft = place(circle, C.ao, parent, x, 0.02, z, r * 1.7, r * 1.7, r * 1.7);
+  soft.rotation.x = -Math.PI / 2;
+  const mesh = place(circle, C.shadow, parent, x, 0.035, z, r, r, r);
   mesh.rotation.x = -Math.PI / 2;
   return mesh;
 }
@@ -151,10 +190,38 @@ function plant(parent, x, z, s = 1) {
   g.scale.setScalar(s);
   parent.add(g);
   place(cyl, C.pot, g, 0, 0.16, 0, 0.18, 0.32, 0.18);
-  place(sphere, C.plant, g, 0, 0.52, 0, 0.28, 0.32, 0.28);
-  place(sphere, C.plantDark, g, -0.16, 0.38, 0.06, 0.18, 0.2, 0.18);
-  place(sphere, C.plant, g, 0.16, 0.4, -0.04, 0.16, 0.18, 0.16);
+  const crown = new THREE.Group();
+  crown.position.y = 0.42;
+  g.add(crown);
+  place(sphere, C.plant, crown, 0, 0.12, 0, 0.28, 0.32, 0.28);
+  place(sphere, C.plantDark, crown, -0.16, -0.02, 0.06, 0.18, 0.2, 0.18);
+  place(sphere, C.plant, crown, 0.16, 0, -0.04, 0.16, 0.18, 0.16);
+  crowns.push(crown);
   shadow(parent, x, z, 0.28 * s);
+}
+
+function hangLamp(parent, x, z) {
+  place(cyl, C.black, parent, x, 2.95, z, 0.025, 0.4, 0.025);
+  place(cyl, C.desk, parent, x, 2.72, z, 0.18, 0.06, 0.18);
+  place(sphere, C.bulb, parent, x, 2.6, z, 0.1, 0.07, 0.1);
+  const pool = place(circle, C.pool, parent, x, 0.045, z, 1.7, 1.7, 1.7);
+  pool.rotation.x = -Math.PI / 2;
+  const light = new THREE.PointLight(0xffc98a, 0, 12, 2);
+  light.position.set(x, 2.45, z);
+  parent.add(light);
+  lights.push(light);
+}
+
+function mug(parent, x, y, z) {
+  place(cyl, C.mug, parent, x, y, z, 0.055, 0.08, 0.055);
+  place(cyl, C.coffee, parent, x, y + 0.045, z, 0.04, 0.02, 0.04);
+  const puff = place(sphere, C.steam, parent, x, y + 0.12, z, 0.04, 0.04, 0.04);
+  steams.push({ mesh: puff, x, y: y + 0.1, z, phase: steams.length * 1.3 });
+}
+
+function poster(parent, x, y, z, rotY, material) {
+  const board = place(box, material, parent, x, y, z, 0.7, 0.9, 0.04);
+  board.rotation.y = rotY;
 }
 
 function roundTable(parent, x, z, chairColor) {
@@ -211,9 +278,13 @@ export function createDesk(parent, slot) {
     place(box, C.leg, desk, lx, 0.36, lz, 0.06, 0.7, 0.06);
   }
   const screen = monitor(desk, 0, 1.08, -0.5);
-  place(box, C.wall, desk, 0, 0.8, -0.05, 0.36, 0.03, 0.14);
-  place(box, C.chair, desk, 0, 0.46, 0.62, 0.42, 0.07, 0.4);
-  place(box, C.chair, desk, 0, 0.72, 0.8, 0.42, 0.42, 0.06);
+  place(box, C.keys, desk, 0, 0.8, -0.02, 0.34, 0.025, 0.13);
+  place(box, C.black, desk, 0.05, 0.785, 0.16, 0.18, 0.012, 0.025);
+  mug(desk, 0.48, 0.84, -0.22);
+  place(cyl, C.black, desk, -0.52, 0.96, -0.12, 0.012, 0.32, 0.012);
+  place(sphere, C.bulb, desk, -0.52, 1.14, -0.12, 0.055, 0.045, 0.055);
+  place(chairSeat, C.chair, desk, 0, 0.46, 0.62);
+  place(chairBack, C.chair, desk, 0, 0.74, 0.8);
   place(cyl, C.black, desk, 0, 0.24, 0.62, 0.04, 0.4, 0.04);
   place(cyl, C.black, desk, 0, 0.05, 0.62, 0.18, 0.04, 0.18);
   shadow(desk, 0, 0.2, 0.7);
@@ -238,6 +309,16 @@ function buildLobby(floor) {
   plant(floor, 6.8, -1.2, 1.05);
   place(cyl, C.black, floor, 6.2, 0.75, 2.8, 0.04, 1.5, 0.04);
   place(sphere, mat(0xfff1c9), floor, 6.2, 1.55, 2.8, 0.14, 0.14, 0.14);
+  place(box, mat(0xf0d2c4), floor, -1.5, 0.02, 2.6, 5.2, 0.025, 3.4);
+  place(box, mat(0xdfe3ea), floor, 2.6, 0.28, 4.6, 1.6, 0.28, 0.7);
+  place(box, mat(0xd5dae3), floor, 2.6, 0.5, 4.88, 1.6, 0.28, 0.12);
+  mug(floor, -4.2, 1.2, 1.6);
+  mug(floor, -5.0, 1.2, 1.45);
+  place(cyl, C.wood, floor, -3.6, 1.18, 1.5, 0.1, 0.03, 0.1);
+  place(sphere, mat(0xe7a35a), floor, -3.6, 1.24, 1.5, 0.06, 0.04, 0.06);
+  poster(floor, 3.4, 1.6, 4.85, 0.4, C.posterA);
+  hangLamp(floor, -2.2, 1.4);
+  hangLamp(floor, 3.2, 2.8);
 }
 
 function buildLibrary(floor) {
@@ -257,6 +338,13 @@ function buildLibrary(floor) {
   place(cyl, C.leg, floor, -2.2, 0.28, 4.6, 0.05, 0.5, 0.05);
   plant(floor, 7.2, 2.4, 1);
   plant(floor, -7.0, 0.4, 0.9);
+  place(box, mat(0xe7dcc8), floor, 1.2, 0.02, 1.4, 4.6, 0.025, 3.2);
+  mug(floor, 2.0, 0.52, 0.5);
+  mug(floor, 2.8, 0.52, 0.7);
+  poster(floor, -6.6, 1.45, 1.4, 0.9, C.posterB);
+  place(box, mat(0xc4554a), floor, 4.8, 0.08, 2.2, 0.35, 0.06, 0.28);
+  hangLamp(floor, -2.4, 2.2);
+  hangLamp(floor, 3.0, 1.2);
 }
 
 function buildOffice(floor) {
@@ -313,6 +401,10 @@ function buildOffice(floor) {
   plant(floor, 5.6, -2.2, 0.85);
   plant(floor, -2.4, 2.2, 1.05);
   plant(floor, 8.0, 5.3, 0.8);
+  poster(floor, -3.2, 1.7, -6.32, 0, C.posterA);
+  poster(floor, 6.4, 1.55, -6.32, 0, C.posterB);
+  hangLamp(floor, -1.2, -2.4);
+  hangLamp(floor, 2.2, 2.2);
   return { tvMat, wallScreen };
 }
 
@@ -385,15 +477,37 @@ export function buildWorld(scene) {
   };
 
   function applyTheme(night) {
-    C.floor.color.set(night ? 0x323846 : 0xe4e7ee);
-    C.rug.color.set(night ? 0x3a4154 : 0xd5dbe6);
-    C.wall.color.set(night ? 0x2a303c : 0xf7f8fb);
-    C.floorEdge.color.set(night ? 0x262b36 : 0xcfd4de);
-    C.trim.color.set(night ? 0x3a4150 : 0xd5dae3);
-    C.desk.color.set(night ? 0xd5dae4 : 0xffffff);
-    exterior.winMat.emissiveIntensity = night ? 0.95 : 0.4;
-    office.tvMat.emissiveIntensity = night ? 0.7 : 0.25;
-    office.wallScreen.emissiveIntensity = night ? 0.75 : 0.35;
+    C.floor.color.set(night ? 0x6b5e54 : 0xf0f2f6);
+    C.rug.color.set(night ? 0x7a6758 : 0xd8cfc3);
+    C.wall.color.set(night ? 0x73685e : 0xfbfcfe);
+    C.floorEdge.color.set(night ? 0x4e463f : 0xcfd4de);
+    C.trim.color.set(night ? 0x5c534a : 0xd5dae3);
+    C.desk.color.set(night ? 0xf3f1ec : 0xffffff);
+    C.bulb.emissiveIntensity = night ? 2.4 : 0.08;
+    C.pool.opacity = night ? 0.62 : 0;
+    C.steam.opacity = night ? 0.2 : 0.32;
+    exterior.winMat.emissive.set(night ? 0xffd089 : 0xf0d7a2);
+    exterior.winMat.emissiveIntensity = night ? 1.55 : 0.35;
+    exterior.winMat.color.set(night ? 0xffe1b0 : 0x9fb4c8);
+    office.tvMat.emissiveIntensity = night ? 1.05 : 0.25;
+    office.wallScreen.emissiveIntensity = night ? 1.15 : 0.35;
+    for (let i = 0; i < lights.length; i++) lights[i].intensity = night ? 16 : 0;
+  }
+
+  function animate(time, night) {
+    for (let i = 0; i < crowns.length; i++) {
+      crowns[i].rotation.z = Math.sin(time * 0.7 + i) * 0.04;
+      crowns[i].rotation.x = Math.cos(time * 0.5 + i * 1.3) * 0.02;
+    }
+    for (let i = 0; i < steams.length; i++) {
+      const puff = steams[i];
+      const u = (time * 0.45 + puff.phase) % 1.4;
+      puff.mesh.position.set(puff.x, puff.y + u * 0.28, puff.z);
+      puff.mesh.scale.setScalar(0.035 + u * 0.03);
+      puff.mesh.visible = u < 1.15;
+    }
+    const flicker = night ? 1.15 + Math.sin(time * 9.5) * 0.06 : 0.35 + Math.sin(time * 6) * 0.03;
+    office.wallScreen.emissiveIntensity = flicker;
   }
 
   return {
@@ -402,6 +516,7 @@ export function buildWorld(scene) {
     floor3: floors[2],
     spots,
     applyTheme,
+    animate,
     tvMat: office.tvMat,
   };
 }

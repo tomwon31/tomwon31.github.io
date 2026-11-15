@@ -20,7 +20,7 @@ const FALLBACK_COLORS = ['#8F59F9', '#F2F2F2', '#B5B5B5', '#3DDC5A', '#1E6FFF', 
 
 const sphere = new THREE.SphereGeometry(1, 16, 12);
 const eyeGeo = new THREE.SphereGeometry(1, 8, 6);
-const eyeMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+const eyeMat = new THREE.MeshBasicMaterial({ color: 0x241c22 });
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x8d8d8d, side: THREE.BackSide });
 const ink = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
 const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -42,6 +42,57 @@ const geos = {
   spark: new THREE.SphereGeometry(1, 6, 4),
 };
 
+function smoothClosed(points) {
+  const shape = new THREE.Shape();
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = mid(points[points.length - 1], points[0]);
+  shape.moveTo(start[0], start[1]);
+  for (let i = 0; i < points.length; i++) {
+    const v = points[i];
+    const m = mid(v, points[(i + 1) % points.length]);
+    shape.quadraticCurveTo(v[0], v[1], m[0], m[1]);
+  }
+  return shape;
+}
+
+function puffyExtrude(shape, bevel) {
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.32,
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel * 0.85,
+    bevelSegments: 3,
+    curveSegments: 10,
+  });
+  geo.translate(0, 0, -0.22);
+  return geo;
+}
+
+function starPoints() {
+  const pts = [];
+  const n = 5;
+  for (let i = 0; i < n * 2; i++) {
+    const r = i % 2 === 0 ? 0.56 : 0.2;
+    const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+    pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+  }
+  return pts;
+}
+
+function cloudPoints() {
+  const pts = [];
+  const steps = 72;
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    const rad = 0.3 + 0.11 * Math.cos(6 * a) + 0.03 * Math.cos(3 * a + 0.6);
+    pts.push([Math.cos(a) * rad, Math.sin(a) * rad * 0.86]);
+  }
+  return pts;
+}
+
+geos.star = puffyExtrude(smoothClosed(starPoints()), 0.06);
+geos.cloud = puffyExtrude(smoothClosed(cloudPoints()), 0.16);
+
 function dropGeometry() {
   const pts = [];
   const n = 14;
@@ -60,15 +111,20 @@ function luminance(hex) {
   return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 }
 
-function addEyes(parent, z, y, sep) {
+// Eyes stay on local +Y (upright) and sit on the upper-front surface the
+// isometric camera actually sees. A vertical face at the equator reads as
+// upside down from a 45° view.
+function addEyes(parent, y, z, sep) {
   const left = new THREE.Mesh(eyeGeo, eyeMat);
   const right = new THREE.Mesh(eyeGeo, eyeMat);
-  left.scale.set(0.07, 0.15, 0.055);
+  left.scale.set(0.055, 0.12, 0.045);
   right.scale.copy(left.scale);
-  left.position.set(-sep, y, z + 0.05);
-  right.position.set(sep, y, z + 0.05);
-  left.rotation.z = 0.28;
-  right.rotation.z = 0.28;
+  left.position.set(-sep, y, z);
+  right.position.set(sep, y, z);
+  left.rotation.z = 0.22;
+  right.rotation.z = 0.22;
+  left.renderOrder = 2;
+  right.renderOrder = 2;
   parent.add(left, right);
 }
 
@@ -76,16 +132,17 @@ function addOutline(mesh) {
   const shell = new THREE.Mesh(mesh.geometry, outlineMat);
   shell.position.copy(mesh.position);
   shell.rotation.copy(mesh.rotation);
-  shell.scale.copy(mesh.scale).multiplyScalar(1.12);
+  shell.scale.copy(mesh.scale).multiplyScalar(1.045);
   mesh.parent.add(shell);
 }
 
 function makeShape(shape, material, light) {
   const group = new THREE.Group();
   let height = 0.78;
-  let front = 0.36;
-  let eyeY = 0.05;
-  let sep = 0.14;
+  let eyeY = 0.16;
+  let eyeZ = 0.34;
+  let sep = 0.12;
+  let pitch = 0;
 
   const addMesh = (geo, x, y, z, s, rot) => {
     const mesh = new THREE.Mesh(geo, material);
@@ -99,77 +156,77 @@ function makeShape(shape, material, light) {
 
   if (shape === 'cube') {
     addMesh(geos.cube, 0, 0, 0);
-    front = 0.4;
+    eyeY = 0.14;
+    eyeZ = 0.42;
   } else if (shape === 'rounded_square' || shape === 'rounded') {
     addMesh(geos.rounded, 0, 0, 0);
-    front = 0.42;
+    eyeY = 0.16;
+    eyeZ = 0.44;
     height = 0.82;
   } else if (shape === 'sphere' || shape === 'bubble') {
     addMesh(sphere, 0, 0, 0, 0.4);
-    if (shape === 'bubble') addMesh(sphere, -0.18, -0.28, 0.05, 0.12);
-    front = 0.36;
-    eyeY = 0.04;
+    if (shape === 'bubble') addMesh(sphere, -0.16, -0.22, 0.12, 0.11);
+    eyeY = 0.2;
+    eyeZ = 0.34;
     height = 0.8;
+    sep = 0.1;
   } else if (shape === 'pill') {
     addMesh(geos.pill, 0, 0, 0);
-    front = 0.3;
+    eyeY = 0.2;
+    eyeZ = 0.32;
     height = 0.9;
   } else if (shape === 'cone') {
     addMesh(geos.cone, 0, 0, 0);
-    front = 0.28;
-    eyeY = 0.05;
+    eyeY = 0.14;
+    eyeZ = 0.26;
     height = 0.82;
   } else if (shape === 'diamond') {
     addMesh(geos.diamond, 0, 0, 0);
-    front = 0.34;
+    eyeY = 0.14;
+    eyeZ = 0.32;
     height = 0.9;
   } else if (shape === 'drop') {
     addMesh(geos.drop, 0, 0, 0);
-    front = 0.36;
-    eyeY = -0.02;
+    eyeY = 0.06;
+    eyeZ = 0.38;
     height = 0.95;
-    sep = 0.12;
+    sep = 0.1;
   } else if (shape === 'hexagon') {
     const mesh = addMesh(geos.hex, 0, 0, 0);
     mesh.rotation.x = Math.PI / 2;
-    front = 0.22;
+    eyeY = 0.22;
+    eyeZ = 0.16;
     height = 0.84;
+    pitch = -0.5;
   } else if (shape === 'triangle') {
     const mesh = addMesh(geos.tri, 0, 0, 0);
     mesh.rotation.x = Math.PI / 2;
-    front = 0.2;
+    eyeY = 0.22;
+    eyeZ = 0.14;
     height = 0.9;
+    pitch = -0.5;
   } else if (shape === 'star') {
-    addMesh(sphere, 0, 0, 0, 0.24);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
-      addMesh(sphere, Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0, 0.2);
-    }
-    front = 0.26;
-    height = 1.0;
-    sep = 0.1;
-  } else if (shape === 'cloud') {
-    addMesh(sphere, 0, 0, 0, 0.26);
-    const lobes = [
-      [0.28, 0.08, 0.2],
-      [-0.26, 0.1, 0.18],
-      [0.08, 0.3, 0.18],
-      [-0.06, -0.28, 0.17],
-      [0.22, -0.16, 0.16],
-      [-0.22, -0.12, 0.15],
-    ];
-    for (let i = 0; i < lobes.length; i++) {
-      addMesh(sphere, lobes[i][0], lobes[i][1], 0.02, lobes[i][2]);
-    }
-    front = 0.28;
+    addMesh(geos.star, 0, 0, 0);
+    eyeY = 0.22;
+    eyeZ = 0.28;
     height = 1.05;
     sep = 0.1;
+    pitch = -0.5;
+  } else if (shape === 'cloud') {
+    addMesh(geos.cloud, 0, 0, 0);
+    eyeY = 0.2;
+    eyeZ = 0.26;
+    height = 0.9;
+    sep = 0.1;
+    pitch = -0.48;
   } else {
     addMesh(geos.rounded, 0, 0, 0);
-    front = 0.4;
+    eyeY = 0.16;
+    eyeZ = 0.34;
   }
 
-  addEyes(group, front, eyeY, sep);
+  addEyes(group, eyeY, eyeZ, sep);
+  if (pitch) group.rotation.x = pitch;
   return { group, hover: height * 0.5 + 0.52, ground: height * 0.46, half: height * 0.5 };
 }
 
@@ -322,7 +379,14 @@ class Bot {
         }
       });
     }
-    const material = new THREE.MeshLambertMaterial({ color: look.color });
+    const glossy = look.shape === 'sphere' || luminance(look.color) > 0.8;
+    const color = new THREE.Color(look.color);
+    const material = new THREE.MeshPhongMaterial({
+      color,
+      specular: glossy ? 0xffffff : 0x9aa3b2,
+      shininess: glossy ? 78 : 22,
+      emissive: color.clone().multiplyScalar(glossy ? 0.05 : 0.12),
+    });
     const built = makeShape(look.shape, material, luminance(look.color) > 0.62);
     this.shapeGroup = built.group;
     this.hoverY = built.hover;

@@ -10,8 +10,8 @@
 }
 
 body.night {
-  --ink: #e8edf6;
-  --muted: #a8b0c0;
+  --ink: #f4f7fb;
+  --muted: #d0d7e4;
   --panel: rgba(24, 29, 38, 0.92);
   --line: rgba(255, 255, 255, 0.06);
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
@@ -23,6 +23,7 @@ html, body {
   margin: 0;
   overflow: hidden;
   background: var(--bg);
+  color: var(--ink);
 }
 
 #scene { position: fixed; inset: 0; }
@@ -30,6 +31,7 @@ html, body {
 
 .panel {
   background: var(--panel);
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 22px;
   box-shadow: var(--shadow);
@@ -141,9 +143,26 @@ body.night .ghost.on { background: #f2f4f8; color: #1d2430; }
   margin-bottom: 4px;
   text-align: left;
 }
+.floors button,
+.floors button b,
+#roster .name,
+.brand strong {
+  color: var(--ink);
+}
 .floors button b { font-size: 14px; }
-.floors button span { font-size: 13px; color: var(--muted); }
-.floors button.on span { color: inherit; }
+.floors button span,
+#roster .task,
+.brand p,
+.floors h2,
+.roster h2 {
+  color: var(--muted);
+}
+.floors button.on,
+.floors button.on span { color: #fff; }
+body.night .floors button.on,
+body.night .floors button.on span,
+body.night .seg button.on,
+body.night .ghost.on { color: #1d2430; }
 
 #roster { list-style: none; margin: 0; padding: 0; }
 #roster li {
