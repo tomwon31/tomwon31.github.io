@@ -4,19 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>tomwon31</title>
-  <style>
-    html, body { height: 100%; margin: 0; }
-    body {
-      display: grid;
-      place-items: center;
-      background: #f3ecdf;
-      color: #3c342c;
-      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "WenQuanYi Micro Hei", sans-serif;
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23c4552a'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./terminal/terminal.css">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
     }
-    a { color: #2a6f8f; font-size: 18px; }
-  </style>
+  }
+  </script>
 </head>
 <body>
-  <p><a href="office/">机器人办公室</a></p>
+  <div id="scene"></div>
+  <div class="grade" aria-hidden="true"></div>
+  <p id="wx" class="wx" aria-live="polite">纽约 · 正在看天</p>
+  <button type="button" id="back" class="back" hidden>返回 <kbd>Esc</kbd></button>
+  <p class="hint">轻拖环顾 · 点击电脑</p>
+  <a class="note" href="/office/"><small>另一间屋子</small><b>机器人办公室</b></a>
+  <div id="boot">正在点灯…</div>
+  <noscript><p class="hint">需要启用 JavaScript。</p></noscript>
+  <script type="module">
+    import('./main.js').catch(() => {
+      const node = document.getElementById('boot');
+      if (node && node.textContent.indexOf('正在点灯') !== -1) {
+        node.textContent = '场景没有点亮，请检查网络后刷新';
+      }
+    });
+  </script>
 </body>
 </html>
