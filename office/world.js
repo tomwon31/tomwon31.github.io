@@ -1,374 +1,407 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-// Shared unit geometries. Meshes scale these instead of allocating their own.
-export const geos = {
-  box: new THREE.BoxGeometry(1, 1, 1),
-  sphere: new THREE.SphereGeometry(1, 10, 8),
-  cyl: new THREE.CylinderGeometry(1, 1, 1, 8),
-  cone: new THREE.ConeGeometry(1, 1, 8),
-  plane: new THREE.PlaneGeometry(1, 1),
-  circle: new THREE.CircleGeometry(1, 14),
-  torus: new THREE.TorusGeometry(1, 0.22, 5, 10),
-  head: new THREE.SphereGeometry(0.18, 10, 8),
-  torso: new THREE.CapsuleGeometry(0.155, 0.24, 2, 6),
-  limb: new THREE.CapsuleGeometry(0.048, 0.22, 2, 5),
-  eye: new THREE.SphereGeometry(0.046, 6, 5),
-  pupil: new THREE.SphereGeometry(0.02, 5, 4),
-  ring: new THREE.TorusGeometry(0.052, 0.012, 4, 8),
-};
+export const FLOOR_Y = [0, 7.5, 15];
+export const FLOORS = [
+  { id: 1, label: '1F', name: '大堂' },
+  { id: 2, label: '2F', name: '阅览' },
+  { id: 3, label: '3F', name: '办公' },
+];
 
-const matCache = new Map();
+// First seven are today's desks. Later names in status.json grow into the rest.
+export const DESK_SLOTS = [
+  { x: -5.5, z: -3.35, rot: 0.18 },
+  { x: -2.7, z: -4.05, rot: 0.06 },
+  { x: 0.1, z: -4.05, rot: 0 },
+  { x: 2.9, z: -4.05, rot: -0.06 },
+  { x: 5.6, z: -3.35, rot: -0.16 },
+  { x: -7.35, z: -0.9, rot: 1.05 },
+  { x: -7.15, z: 1.7, rot: 0.95 },
+  { x: -4.4, z: -0.7, rot: 0.35 },
+  { x: -1.5, z: -0.55, rot: 0.15 },
+  { x: 1.5, z: -0.55, rot: -0.05 },
+  { x: 4.4, z: -0.35, rot: -0.25 },
+  { x: 6.6, z: -2.15, rot: -0.45 },
+];
 
-export function mat(color) {
+const box = new THREE.BoxGeometry(1, 1, 1);
+const cyl = new THREE.CylinderGeometry(1, 1, 1, 10);
+const sphere = new THREE.SphereGeometry(1, 12, 10);
+const plane = new THREE.PlaneGeometry(1, 1);
+const circle = new THREE.CircleGeometry(1, 16);
+const deskTop = new RoundedBoxGeometry(1.46, 0.08, 0.72, 2, 0.1);
+
+const cache = new Map();
+function mat(color, extras) {
   const hex = color instanceof THREE.Color ? color.getHex() : color;
-  let material = matCache.get(hex);
+  const key = extras ? hex + ':' + (extras.emissive || '') + (extras.rough || '') : hex;
+  let material = cache.get(key);
   if (!material) {
-    material = new THREE.MeshLambertMaterial({ color: hex });
-    matCache.set(hex, material);
+    material = new THREE.MeshLambertMaterial(Object.assign({ color: hex }, extras));
+    cache.set(key, material);
   }
   return material;
 }
 
-export function tint(hex, toward, t) {
-  const color = new THREE.Color(hex);
-  color.lerp(new THREE.Color(toward), t);
-  return color.getHex();
-}
-
-function canvasTexture(width, height, draw) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  draw(canvas.getContext('2d'), width, height);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-const screenTex = canvasTexture(128, 80, (ctx, w, h) => {
-  ctx.fillStyle = '#1a4d68';
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#12384c';
-  ctx.fillRect(0, 0, w, 14);
-  ctx.fillStyle = '#7dffa1';
-  ctx.fillRect(8, 5, 18, 5);
-  ctx.fillStyle = '#d7f4ff';
-  const lines = [22, 34, 46, 58, 70];
-  const widths = [78, 96, 64, 88, 52];
-  for (let i = 0; i < lines.length; i++) {
-    ctx.globalAlpha = 0.85 - i * 0.08;
-    ctx.fillRect(10, lines[i], widths[i], 5);
-  }
-  ctx.globalAlpha = 1;
-});
-
-const tvTex = canvasTexture(160, 96, (ctx, w, h) => {
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#7ec8f0');
-  sky.addColorStop(0.55, '#b7e3fb');
-  sky.addColorStop(0.55, '#67b15a');
-  sky.addColorStop(1, '#3d8a45');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#f4f7fb';
-  ctx.beginPath();
-  ctx.arc(120, 28, 12, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#ef5d4c';
-  ctx.fillRect(70, 48, 16, 18);
-  ctx.fillStyle = '#ffd166';
-  ctx.fillRect(86, 54, 10, 8);
-  ctx.fillStyle = '#143024';
-  ctx.fillRect(40, 62, 28, 10);
-  ctx.fillRect(96, 66, 36, 12);
-});
-
-const signTex = canvasTexture(512, 128, (ctx, w, h) => {
-  ctx.fillStyle = '#f4ecdf';
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = '#e0d0b8';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(6, 6, w - 12, h - 12);
-  ctx.fillStyle = '#3e4a42';
-  ctx.font = '700 64px "WenQuanYi Micro Hei", "PingFang SC", "Microsoft YaHei", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('机器人办公室', w / 2, h / 2 + 2);
-});
-
-export const mats = {
-  floor: mat(0xe7d0aa),
-  ground: mat(0xefe4d2),
-  wall: mat(0xf6f1e7),
-  trim: mat(0xe4d3c0),
-  window: mat(0xc5e6f6),
-  windowFrame: mat(0xfffaf4),
-  deskTop: mat(0xfffaf3),
-  deskLeg: mat(0xc49262),
-  bezel: mat(0x2a3140),
-  keys: mat(0x3d4656),
-  chair: mat(0x6e86a3),
-  chairBase: mat(0x4e5968),
-  sofa: mat(0x5c7194),
-  sofaBack: mat(0x4d6286),
-  cushion: mat(0x8eabc9),
-  pillow: mat(0xe07b78),
-  table: mat(0xd7b088),
-  rug: mat(0xe7b09f),
-  rug2: mat(0xeadcc6),
-  plant: mat(0x2f8f4e),
-  plantDark: mat(0x246e3d),
-  pot: mat(0xd4784a),
-  snackWood: mat(0xc79a68),
-  snackBack: mat(0xf3e6d4),
-  cooler: mat(0xf5f8f8),
-  coolerTrim: mat(0xc5d0d8),
-  water: mat(0x8fd4ef),
-  cup: mat(0xf7fbff),
-  vending: mat(0xd24b58),
-  vendingDark: mat(0xa83344),
-  glass: mat(0x243044),
-  mug: mat(0xfff8f2),
-  coffee: mat(0x6b4226),
-  page: mat(0xfffdf8),
-  bookCover: mat(0xc4554a),
-  console: mat(0x222833),
-  lamp: mat(0xf3d48a),
-  screenIdle: new THREE.MeshLambertMaterial({ color: 0x232a36 }),
-  shadow: new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    transparent: true,
-    opacity: 0.14,
-    depthWrite: false,
-  }),
+const C = {
+  floor: mat(0xe4e7ee),
+  rug: mat(0xd5dbe6),
+  floorEdge: mat(0xcfd4de),
+  wall: mat(0xf7f8fb),
+  trim: mat(0xd5dae3),
+  desk: mat(0xffffff),
+  leg: mat(0xe6e9ef),
+  black: mat(0x23262e),
+  chair: mat(0x2a2e36),
+  plant: mat(0x7dce7a),
+  plantDark: mat(0x3e9a55),
+  pot: mat(0xf4f1ea),
+  wood: mat(0xe7d3b0),
+  red: mat(0xe23d3d),
+  greenChair: mat(0x2f6d4f),
+  bookA: mat(0xc44536),
+  bookB: mat(0x2a6f97),
+  bookC: mat(0xee9b00),
+  bookD: mat(0x2d6a4f),
+  bookE: mat(0x6d597a),
+  cafe: mat(0xf3f0ea),
+  glass: mat(0xd7e4ea),
+  plinth: mat(0x2c313b),
+  shadow: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.14, depthWrite: false }),
 };
 
-export function makeScreenMaterial(hex) {
-  const emissive = new THREE.Color(hex).lerp(new THREE.Color(0xffffff), 0.42);
-  return new THREE.MeshLambertMaterial({
-    color: emissive.clone().multiplyScalar(0.32),
-    emissive,
-    emissiveIntensity: 0.7,
-    map: screenTex,
-    emissiveMap: screenTex,
-  });
+function canvasTex(w, h, draw) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  draw(canvas.getContext('2d'), w, h);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
-const tvMat = new THREE.MeshLambertMaterial({
-  color: 0x163044,
-  emissive: 0xb7e6ff,
-  emissiveIntensity: 0.18,
-  map: tvTex,
-  emissiveMap: tvTex,
+const chartTex = canvasTex(160, 96, (ctx, w, h) => {
+  ctx.fillStyle = '#f4f7fb';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#d9e2ec';
+  for (let i = 1; i < 4; i++) ctx.fillRect(0, (h / 4) * i, w, 1);
+  const colors = ['#8f59f9', '#1e6fff', '#3ddc5a', '#f5b942', '#e23d3d'];
+  for (let i = 0; i < 5; i++) {
+    const bh = 24 + ((i * 37) % 48);
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(16 + i * 28, h - 12 - bh, 16, bh);
+  }
 });
 
-const vendingLightMat = new THREE.MeshLambertMaterial({
-  color: 0xffe8a8,
-  emissive: 0xffd56a,
-  emissiveIntensity: 0.6,
+const wallChartTex = canvasTex(220, 120, (ctx, w, h) => {
+  ctx.fillStyle = '#1b2330';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = '#3ec6ff';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  const pts = [70, 48, 40, 55, 32, 60, 44, 28, 36];
+  pts.forEach((y, i) => {
+    const x = 16 + i * ((w - 32) / (pts.length - 1));
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = '#3ddc5a';
+  for (let i = 0; i < 6; i++) ctx.fillRect(18 + i * 32, h - 18 - (10 + (i % 3) * 12), 14, 10 + (i % 3) * 12);
 });
 
-const signMat = new THREE.MeshLambertMaterial({ map: signTex });
+const windowTex = canvasTex(128, 256, (ctx, w, h) => {
+  ctx.fillStyle = '#3c4452';
+  ctx.fillRect(0, 0, w, h);
+  for (let y = 10; y < h - 8; y += 18) {
+    for (let x = 8; x < w - 8; x += 16) {
+      const on = ((x * 3 + y * 5) % 7) > 2;
+      ctx.fillStyle = on ? (y % 36 === 10 ? '#f6d98a' : '#d7e6f4') : '#2a303a';
+      ctx.fillRect(x, y, 8, 10);
+    }
+  }
+});
 
-export function place(geometry, material, parent, x, y, z, sx = 1, sy = 1, sz = 1) {
-  const mesh = new THREE.Mesh(geometry, material);
+const signTex = (text) => canvasTex(256, 64, (ctx, w, h) => {
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#243044';
+  ctx.font = '700 36px "WenQuanYi Micro Hei", "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 8, h / 2);
+});
+
+function place(geo, material, parent, x, y, z, sx = 1, sy = 1, sz = 1) {
+  const mesh = new THREE.Mesh(geo, material);
   mesh.position.set(x, y, z);
   mesh.scale.set(sx, sy, sz);
   parent.add(mesh);
   return mesh;
 }
 
-// Workstation anchors. rot is the yaw that faces the bot toward the desk
-// (local -Z). The first seven are the desks used today; the rest are spare
-// slots so a new name in status.json can grow a desk without a code change.
-export const SLOTS = [
-  { x: -9.0, z: -6.45, rot: 0 },
-  { x: -5.2, z: -6.45, rot: 0 },
-  { x: -1.4, z: -6.45, rot: 0 },
-  { x: 2.4, z: -6.45, rot: 0 },
-  { x: 10.55, z: -3.6, rot: -Math.PI / 2 },
-  { x: 10.55, z: 0.15, rot: -Math.PI / 2 },
-  { x: 10.55, z: 3.7, rot: -Math.PI / 2 },
-  { x: 6.2, z: -6.45, rot: 0 },
-  { x: 10.55, z: 6.55, rot: -Math.PI / 2 },
-  { x: -10.45, z: 6.5, rot: Math.PI / 2 },
-  { x: 2.6, z: 7.15, rot: Math.PI },
-  { x: 6.4, z: 7.15, rot: Math.PI },
-];
-
-// Lounge footprint used by the walker so bots route around the sofa and TV.
-export const LOUNGE = { minX: -7.2, maxX: -3.15, minZ: 1.05, maxZ: 5.25 };
-
-function addWindow(parent, x, y, z) {
-  place(geos.box, mats.windowFrame, parent, x, y, z, 1.55, 1.15, 0.08);
-  place(geos.box, mats.window, parent, x, y, z + 0.05, 1.25, 0.88, 0.04);
+function shadow(parent, x, z, r) {
+  const mesh = place(circle, C.shadow, parent, x, 0.03, z, r, r, r);
+  mesh.rotation.x = -Math.PI / 2;
+  return mesh;
 }
 
-function addPlant(parent, x, z, scale, leaves) {
-  const pot = new THREE.Group();
-  pot.position.set(x, 0, z);
-  pot.scale.setScalar(scale);
-  parent.add(pot);
-  place(geos.cyl, mats.pot, pot, 0, 0.16, 0, 0.22, 0.32, 0.22);
-  place(geos.cyl, mat(tint(0xd4784a, 0xffffff, 0.25)), pot, 0, 0.34, 0, 0.26, 0.08, 0.26);
-  const crown = new THREE.Group();
-  crown.position.y = 0.42;
-  pot.add(crown);
-  place(geos.sphere, mats.plant, crown, 0, 0.38, 0, 0.28, 0.34, 0.28);
-  place(geos.sphere, mats.plantDark, crown, -0.2, 0.22, 0.08, 0.2, 0.2, 0.2);
-  place(geos.sphere, mats.plant, crown, 0.18, 0.2, -0.06, 0.18, 0.22, 0.18);
-  leaves.push(crown);
+function plant(parent, x, z, s = 1) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.scale.setScalar(s);
+  parent.add(g);
+  place(cyl, C.pot, g, 0, 0.16, 0, 0.18, 0.32, 0.18);
+  place(sphere, C.plant, g, 0, 0.52, 0, 0.28, 0.32, 0.28);
+  place(sphere, C.plantDark, g, -0.16, 0.38, 0.06, 0.18, 0.2, 0.18);
+  place(sphere, C.plant, g, 0.16, 0.4, -0.04, 0.16, 0.18, 0.16);
+  shadow(parent, x, z, 0.28 * s);
 }
 
-function addCooler(parent, x, z) {
-  place(geos.box, mats.cooler, parent, x, 0.55, z, 0.46, 1.1, 0.42);
-  place(geos.box, mats.coolerTrim, parent, x, 0.08, z, 0.52, 0.16, 0.48);
-  place(geos.cyl, mats.water, parent, x, 1.28, z, 0.16, 0.36, 0.16);
-  place(geos.box, mats.water, parent, x, 0.72, z + 0.22, 0.08, 0.08, 0.06);
-  place(geos.cyl, mats.cup, parent, x + 0.22, 0.2, z + 0.1, 0.06, 0.1, 0.06);
-}
-
-function addSnackShelf(parent, x, z) {
-  place(geos.box, mats.snackBack, parent, x, 0.9, z, 0.12, 1.5, 1.35);
+function roundTable(parent, x, z, chairColor) {
+  place(cyl, C.wood, parent, x, 0.4, z, 0.55, 0.08, 0.55);
+  place(cyl, C.leg, parent, x, 0.18, z, 0.06, 0.36, 0.06);
+  shadow(parent, x, z, 0.62);
   for (let i = 0; i < 3; i++) {
-    place(geos.box, mats.snackWood, parent, x + 0.12, 0.38 + i * 0.48, z, 0.32, 0.06, 1.25);
+    const a = (i / 3) * Math.PI * 2 + 0.4;
+    const cx = x + Math.cos(a) * 0.85;
+    const cz = z + Math.sin(a) * 0.85;
+    place(cyl, chairColor, parent, cx, 0.24, cz, 0.18, 0.08, 0.18);
+    place(box, chairColor, parent, cx - Math.cos(a) * 0.12, 0.42, cz - Math.sin(a) * 0.12, 0.26, 0.22, 0.07);
   }
-  const colors = [0xe76f51, 0xf4a261, 0x2a9d8f, 0xe9c46a, 0x8ab17d, 0xef6f9b];
-  let n = 0;
-  for (let row = 0; row < 3; row++) {
-    for (let col = -1; col <= 1; col++) {
-      const color = mat(colors[n % colors.length]);
-      n += 1;
-      if (n % 2 === 0) {
-        place(geos.box, color, parent, x + 0.16, 0.52 + row * 0.48, z + col * 0.36, 0.16, 0.18, 0.2);
-      } else {
-        place(geos.cyl, color, parent, x + 0.16, 0.52 + row * 0.48, z + col * 0.36, 0.07, 0.2, 0.07);
-      }
+}
+
+function bookshelf(parent, x, z, rotY, width) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = rotY;
+  parent.add(g);
+  place(box, C.wall, g, 0, 1.15, 0, width, 2.3, 0.38);
+  const colors = [C.bookA, C.bookB, C.bookC, C.bookD, C.bookE];
+  const cols = Math.max(4, Math.round(width / 0.46));
+  for (let row = 0; row < 4; row++) {
+    place(box, C.trim, g, 0, 0.28 + row * 0.52, 0.16, width - 0.08, 0.04, 0.28);
+    for (let c = 0; c < cols; c++) {
+      const color = colors[(row + c) % colors.length];
+      place(box, color, g, -width / 2 + 0.18 + c * ((width - 0.3) / cols), 0.5 + row * 0.52, 0.16, 0.12, 0.32, 0.22);
     }
   }
 }
 
-function addVending(parent, x, z) {
-  place(geos.box, mats.vending, parent, x, 0.85, z, 0.55, 1.7, 0.48);
-  place(geos.box, mats.vendingDark, parent, x, 1.55, z, 0.58, 0.16, 0.5);
-  place(geos.box, vendingLightMat, parent, x, 1.55, z + 0.26, 0.16, 0.08, 0.02);
-  place(geos.box, mats.glass, parent, x + 0.02, 0.95, z + 0.25, 0.36, 0.85, 0.04);
-  const dots = [0xe9c46a, 0x2a9d8f, 0xf4a261, 0x8ab17d];
-  for (let i = 0; i < dots.length; i++) {
-    place(geos.box, mat(dots[i]), parent, x + 0.04, 1.2 - i * 0.18, z + 0.28, 0.22, 0.1, 0.02);
+function monitor(parent, x, y, z) {
+  place(box, C.black, parent, x, y, z, 0.62, 0.4, 0.05);
+  const screenMat = new THREE.MeshLambertMaterial({
+    color: 0xdfe7f2,
+    emissive: 0x9eb6d4,
+    emissiveIntensity: 0.18,
+    map: chartTex,
+    emissiveMap: chartTex,
+  });
+  const screen = place(plane, screenMat, parent, x, y, z + 0.03, 0.52, 0.3, 1);
+  place(box, C.black, parent, x, y - 0.28, z, 0.06, 0.16, 0.06);
+  return screen;
+}
+
+export function createDesk(parent, slot) {
+  const desk = new THREE.Group();
+  desk.position.set(slot.x, 0, slot.z);
+  desk.rotation.y = slot.rot;
+  parent.add(desk);
+  place(deskTop, C.desk, desk, 0, 0.74, -0.2);
+  for (const [lx, lz] of [[-0.58, -0.42], [0.58, -0.42], [-0.58, 0.05], [0.58, 0.05]]) {
+    place(box, C.leg, desk, lx, 0.36, lz, 0.06, 0.7, 0.06);
   }
-  place(geos.box, mats.bezel, parent, x + 0.05, 0.28, z + 0.2, 0.28, 0.08, 0.08);
+  const screen = monitor(desk, 0, 1.08, -0.5);
+  place(box, C.wall, desk, 0, 0.8, -0.05, 0.36, 0.03, 0.14);
+  place(box, C.chair, desk, 0, 0.46, 0.62, 0.42, 0.07, 0.4);
+  place(box, C.chair, desk, 0, 0.72, 0.8, 0.42, 0.42, 0.06);
+  place(cyl, C.black, desk, 0, 0.24, 0.62, 0.04, 0.4, 0.04);
+  place(cyl, C.black, desk, 0, 0.05, 0.62, 0.18, 0.04, 0.18);
+  shadow(desk, 0, 0.2, 0.7);
+  desk.updateMatrix();
+  const sit = new THREE.Vector3(0, 0, 0.62).applyMatrix4(desk.matrix);
+  return { desk, screen, sitX: sit.x, sitZ: sit.z };
 }
 
-function addSofa(parent) {
-  // Faces +X (into the room). Seat center x=-6.15, length along Z.
-  place(geos.box, mats.sofa, parent, -6.2, 0.32, 3.25, 0.9, 0.28, 2.35);
-  place(geos.box, mats.sofaBack, parent, -6.58, 0.58, 3.25, 0.16, 0.52, 2.35);
-  place(geos.box, mats.sofa, parent, -6.28, 0.46, 2.02, 0.72, 0.22, 0.14);
-  place(geos.box, mats.sofa, parent, -6.28, 0.46, 4.48, 0.72, 0.22, 0.14);
-  place(geos.box, mats.cushion, parent, -6.05, 0.5, 2.62, 0.62, 0.1, 0.7);
-  place(geos.box, mats.cushion, parent, -6.05, 0.5, 3.88, 0.62, 0.1, 0.7);
-  place(geos.sphere, mats.pillow, parent, -6.28, 0.58, 2.62, 0.16, 0.16, 0.1);
-  place(geos.sphere, mats.pillow, parent, -6.28, 0.58, 3.88, 0.16, 0.16, 0.1);
+function buildLobby(floor) {
+  place(plane, new THREE.MeshBasicMaterial({ map: signTex('1F  大堂'), transparent: true }), floor, -5.4, 1.7, 0.4, 2.2, 0.5, 1);
+  // Freestanding pieces sit toward the open front so the floor above does not hide them.
+  place(box, C.cafe, floor, -4.6, 0.55, 1.2, 2.2, 1.05, 0.7);
+  place(box, C.desk, floor, -4.6, 1.1, 1.55, 2.3, 0.08, 0.75);
+  place(cyl, C.pot, floor, -3.8, 1.22, 1.55, 0.1, 0.12, 0.1);
+  place(cyl, mat(0x6b4226), floor, -3.8, 1.3, 1.55, 0.07, 0.04, 0.07);
+  place(box, C.desk, floor, 0.8, 0.42, 3.4, 2.1, 0.78, 0.72);
+  place(box, C.wall, floor, 0.8, 0.86, 3.7, 2.2, 0.08, 0.78);
+  roundTable(floor, -1.4, 4.4, C.red);
+  roundTable(floor, 4.2, 1.5, C.red);
+  plant(floor, 6.6, 4.2, 1.15);
+  plant(floor, -7.2, 3.6, 0.95);
+  plant(floor, 6.8, -1.2, 1.05);
+  place(cyl, C.black, floor, 6.2, 0.75, 2.8, 0.04, 1.5, 0.04);
+  place(sphere, mat(0xfff1c9), floor, 6.2, 1.55, 2.8, 0.14, 0.14, 0.14);
 }
 
-function addCoffeeTable(parent) {
-  const x = -5.2;
-  const z = 4.95;
-  place(geos.box, mats.table, parent, x, 0.28, z, 0.9, 0.08, 0.58);
-  for (const [dx, dz] of [[-0.34, -0.2], [0.34, -0.2], [-0.34, 0.2], [0.34, 0.2]]) {
-    place(geos.box, mats.deskLeg, parent, x + dx, 0.13, z + dz, 0.06, 0.26, 0.06);
+function buildLibrary(floor) {
+  place(plane, new THREE.MeshBasicMaterial({ map: signTex('2F  阅览'), transparent: true }), floor, -5.6, 1.85, 2.2, 2.2, 0.5, 1);
+  bookshelf(floor, -5.2, 3.6, 0.3, 2.8);
+  bookshelf(floor, -1.2, 1.1, -0.4, 2.6);
+  bookshelf(floor, 5.4, 3.8, 0.2, 2.4);
+  place(cyl, C.wood, floor, 2.4, 0.42, 0.6, 1.2, 0.08, 0.72);
+  place(box, C.leg, floor, 2.4, 0.2, 0.6, 1.9, 0.08, 0.08);
+  for (const [x, z] of [[1.1, -0.3], [3.6, -0.2], [1.4, 1.6], [3.5, 1.5]]) {
+    place(cyl, C.greenChair, floor, x, 0.28, z, 0.18, 0.1, 0.18);
+    place(box, C.greenChair, floor, x, 0.5, z, 0.32, 0.28, 0.07);
   }
-  place(geos.cyl, mats.mug, parent, x + 0.18, 0.4, z - 0.08, 0.07, 0.1, 0.07);
-  place(geos.cyl, mats.coffee, parent, x + 0.18, 0.46, z - 0.08, 0.055, 0.02, 0.055);
-  place(geos.cyl, mats.page, parent, x - 0.18, 0.34, z + 0.06, 0.16, 0.025, 0.16);
-  const donut = place(geos.torus, mat(0xe7a35a), parent, x - 0.18, 0.4, z + 0.06, 0.09, 0.09, 0.09);
-  donut.rotation.x = Math.PI / 2;
+  place(box, C.wall, floor, 6.4, 1.15, -0.8, 1.6, 1.15, 0.08);
+  place(box, mat(0xdfe7c8), floor, 6.4, 1.15, -0.74, 1.35, 0.9, 0.02);
+  place(sphere, mat(0x8fb8d8), floor, -2.2, 0.72, 4.6, 0.32, 0.32, 0.32);
+  place(cyl, C.leg, floor, -2.2, 0.28, 4.6, 0.05, 0.5, 0.05);
+  plant(floor, 7.2, 2.4, 1);
+  plant(floor, -7.0, 0.4, 0.9);
 }
 
-function addTV(parent) {
-  // Screen faces +Z so the overview camera can see it.
-  const x = -4.15;
-  const z = 1.2;
-  place(geos.box, mats.console, parent, x, 0.22, z, 1.25, 0.44, 0.4);
-  place(geos.box, mat(0xff5a6a), parent, x + 0.42, 0.16, z + 0.04, 0.26, 0.05, 0.16);
-  place(geos.box, mats.bezel, parent, x, 1.0, z + 0.16, 1.42, 0.84, 0.08);
-  place(geos.plane, tvMat, parent, x, 1.0, z + 0.21, 1.22, 0.68, 1);
-  place(geos.sphere, mat(0xf2c14e), parent, x - 0.48, 0.1, z + 1.5, 0.32, 0.09, 0.32);
-  place(geos.sphere, mat(0x8ecae6), parent, x + 0.48, 0.1, z + 1.5, 0.32, 0.09, 0.32);
+function buildOffice(floor) {
+  place(plane, new THREE.MeshBasicMaterial({ map: signTex('3F  办公'), transparent: true }), floor, -6.2, 2.55, -6.28, 2.2, 0.55, 1);
+  place(cyl, C.wall, floor, -7.6, 2.2, -6.18, 0.34, 0.34, 0.05);
+  place(box, C.black, floor, -7.6, 2.2, -6.12, 0.015, 0.18, 0.02);
+  place(box, C.wall, floor, 3.4, 1.7, -6.2, 2.5, 1.35, 0.08);
+  const wallScreen = new THREE.MeshLambertMaterial({
+    color: 0x152033,
+    emissive: 0x67c7ff,
+    emissiveIntensity: 0.35,
+    map: wallChartTex,
+    emissiveMap: wallChartTex,
+  });
+  place(plane, wallScreen, floor, 3.4, 1.72, -6.14, 2.15, 1.05, 1);
+  place(box, C.wall, floor, 7.2, 1.35, -5.6, 1.5, 1.05, 0.06);
+  place(box, mat(0xf7fafc), floor, 7.2, 1.35, -5.55, 1.28, 0.82, 0.02);
+
+  // Common area: sofa, TV, snacks, round red-chair tables, plants.
+  place(box, C.rug, floor, 2.4, 0.025, 2.6, 9.2, 0.03, 6.2);
+  place(box, mat(0xdfe3ea), floor, 1.4, 0.32, 3.7, 2.3, 0.32, 0.8);
+  place(box, mat(0xd5dae3), floor, 1.4, 0.58, 4.02, 2.3, 0.42, 0.16);
+  place(box, mat(0xf7c9c2), floor, 0.6, 0.52, 3.55, 0.42, 0.22, 0.32);
+  place(box, mat(0xf7c9c2), floor, 2.2, 0.52, 3.55, 0.42, 0.22, 0.32);
+  shadow(floor, 1.4, 3.7, 1.1);
+
+  place(box, C.black, floor, 4.85, 0.78, 2.15, 0.12, 1.05, 1.45);
+  const tvMat = new THREE.MeshLambertMaterial({
+    color: 0x163044,
+    emissive: 0x8fd0ff,
+    emissiveIntensity: 0.25,
+    map: chartTex,
+    emissiveMap: chartTex,
+  });
+  const tv = place(plane, tvMat, floor, 4.93, 0.82, 2.15, 0.78, 1.22, 1);
+  tv.rotation.y = Math.PI / 2;
+  place(box, C.black, floor, 4.85, 0.18, 2.15, 0.4, 0.28, 0.8);
+  place(box, mat(0xff5a6a), floor, 4.85, 0.2, 2.55, 0.18, 0.06, 0.28);
+
+  roundTable(floor, -1.6, 4.55, C.red);
+  roundTable(floor, 4.2, 5.15, C.red);
+
+  // Snack shelf and vending machine.
+  place(box, C.wall, floor, 8.15, 0.85, -0.7, 0.28, 1.5, 1.3);
+  for (let i = 0; i < 3; i++) place(box, C.wood, floor, 7.95, 0.4 + i * 0.42, -0.7, 0.32, 0.05, 1.15);
+  const snacks = [0xe76f51, 0xf4a261, 0x2a9d8f, 0xe9c46a, 0x8ab17d];
+  for (let i = 0; i < 5; i++) {
+    place(box, mat(snacks[i]), floor, 7.95, 0.58 + (i % 3) * 0.42, -1.1 + (i % 3) * 0.4, 0.14, 0.16, 0.16);
+  }
+  place(box, C.red, floor, 8.15, 0.9, 3.55, 0.55, 1.7, 0.5);
+  place(box, C.black, floor, 7.9, 0.95, 3.55, 0.08, 0.85, 0.32);
+  place(box, mat(0xffe08a), floor, 7.85, 1.55, 3.55, 0.06, 0.08, 0.16);
+
+  plant(floor, 5.6, -2.2, 0.85);
+  plant(floor, -2.4, 2.2, 1.05);
+  plant(floor, 8.0, 5.3, 0.8);
+  return { tvMat, wallScreen };
+}
+
+function buildExterior(scene) {
+  const g = new THREE.Group();
+  g.visible = false;
+  scene.add(g);
+  const height = 24.2;
+  place(box, mat(0x4a5160), g, 0, height / 2 - 0.4, 0, 16.5, height, 12.2);
+  place(box, C.plinth, g, 0, -0.7, 0, 20, 1.1, 15);
+  const winMat = new THREE.MeshLambertMaterial({
+    color: 0x9fb4c8,
+    emissive: 0xf0d7a2,
+    emissiveIntensity: 0.45,
+    map: windowTex,
+    emissiveMap: windowTex,
+  });
+  place(plane, winMat, g, 0, height / 2, 6.12, 14.6, 22, 1);
+  const back = place(plane, winMat, g, 0, height / 2, -6.12, 14.6, 22, 1);
+  back.rotation.y = Math.PI;
+  const side = place(plane, winMat, g, 8.27, height / 2, 0, 10.4, 22, 1);
+  side.rotation.y = Math.PI / 2;
+  place(box, mat(0x5b6474), g, 0, height + 0.15, 0, 15.2, 0.4, 11);
+  return { group: g, winMat };
 }
 
 export function buildWorld(scene) {
-  const leaves = [];
-
-  place(geos.box, mats.ground, scene, 0, -0.08, 0.4, 40, 0.08, 30);
-  place(geos.box, mats.floor, scene, 0, -0.04, -0.3, 26.2, 0.08, 18.6);
-
-  // Back, left, right. The front stays open for the camera.
-  place(geos.box, mats.wall, scene, 0, 2.05, -9.05, 26.3, 4.1, 0.28);
-  place(geos.box, mats.wall, scene, -13.05, 2.05, -0.35, 0.28, 4.1, 17.4);
-  place(geos.box, mats.wall, scene, 13.05, 2.05, -0.35, 0.28, 4.1, 17.4);
-  place(geos.box, mats.trim, scene, 0, 0.1, -8.88, 25.7, 0.2, 0.08);
-  place(geos.box, mats.trim, scene, -12.88, 0.1, -0.35, 0.08, 0.2, 17.1);
-  place(geos.box, mats.trim, scene, 12.88, 0.1, -0.35, 0.08, 0.2, 17.1);
-
-  addWindow(scene, -9.3, 2.75, -8.88);
-  addWindow(scene, 4.8, 2.75, -8.88);
-  place(geos.box, signMat, scene, -2.2, 3.15, -8.86, 2.6, 0.65, 0.06);
-
-  place(geos.box, mats.rug, scene, -4.15, 0.015, 3.15, 6.4, 0.02, 4.5);
-  const plaza = place(geos.circle, mats.rug2, scene, 3.4, 0.02, 1.6, 2.5, 2.5, 2.5);
-  plaza.rotation.x = -Math.PI / 2;
-
-  addSofa(scene);
-  addCoffeeTable(scene);
-  addTV(scene);
-  addSnackShelf(scene, -12.55, -1.4);
-  addVending(scene, -12.5, 2.15);
-  addCooler(scene, -11.85, -7.55);
-  addPlant(scene, 7.4, 6.7, 1.15, leaves);
-  addPlant(scene, -11.6, 5.6, 0.9, leaves);
-  addPlant(scene, 8.6, -6.3, 0.85, leaves);
-
-  // Floor lamp by the sofa.
-  place(geos.cyl, mats.chairBase, scene, -7.6, 0.55, 4.7, 0.04, 1.1, 0.04);
-  place(geos.cone, mats.lamp, scene, -7.6, 1.2, 4.7, 0.18, 0.22, 0.18);
-  place(geos.sphere, mat(0xfff4cc), scene, -7.6, 1.08, 4.7, 0.06, 0.06, 0.06);
+  const interior = new THREE.Group();
+  scene.add(interior);
+  const floors = [];
+  for (let i = 0; i < 3; i++) {
+    const floor = new THREE.Group();
+    floor.position.y = FLOOR_Y[i];
+    interior.add(floor);
+    floors.push(floor);
+    place(box, C.floor, floor, 0, -0.16, -0.2, 19.2, 0.32, 13.6);
+    place(box, C.floorEdge, floor, 9.35, -0.16, -0.2, 0.28, 0.32, 13.6);
+    place(box, C.floorEdge, floor, 0, -0.16, 6.45, 19.2, 0.32, 0.22);
+    place(box, C.wall, floor, 0, 1.65, -6.55, 18.6, 3.3, 0.18);
+    place(box, C.wall, floor, -9.35, 1.65, -0.2, 0.18, 3.3, 12.8);
+    place(box, C.trim, floor, 0, 0.08, -6.42, 18.4, 0.16, 0.08);
+    place(box, C.trim, floor, -9.22, 0.08, -0.2, 0.08, 0.16, 12.5);
+  }
+  place(box, C.plinth, interior, -1, -0.7, -1.2, 20.4, 0.7, 14.5);
+  buildLobby(floors[0]);
+  buildLibrary(floors[1]);
+  const office = buildOffice(floors[2]);
+  const exterior = buildExterior(scene);
 
   const spots = {
     snack: [
-      { x: -11.2, z: -1.95, yaw: Math.PI / 2, entry: null, side: 'south', taken: null },
-      { x: -11.2, z: -0.85, yaw: Math.PI / 2, entry: null, side: 'south', taken: null },
+      { x: 6.7, z: -0.7 },
+      { x: 6.9, z: 0.15 },
     ],
     read: [
-      { x: -6.02, z: 2.62, yaw: -Math.PI / 2, entry: { x: -6.02, z: 0.9 }, side: 'south', taken: null },
-      { x: -6.02, z: 3.88, yaw: -Math.PI / 2, entry: { x: -6.02, z: 5.55 }, side: 'north', taken: null },
+      { x: 0.7, z: 3.45 },
+      { x: 2.15, z: 3.5 },
     ],
     game: [
-      { x: -4.63, z: 2.7, yaw: 0, entry: { x: -2.35, z: 2.7 }, side: 'south', taken: null },
-      { x: -3.67, z: 2.7, yaw: 0, entry: { x: -2.35, z: 2.7 }, side: 'south', taken: null },
+      { x: 6.15, z: 1.7 },
+      { x: 6.25, z: 2.65 },
     ],
     wander: [
-      { x: 1.4, z: -1.6 },
-      { x: 4.6, z: -2.2 },
-      { x: 6.2, z: 0.4 },
-      { x: 3.2, z: 1.5 },
-      { x: 5.4, z: 3.6 },
-      { x: 2.2, z: 5.6 },
-      { x: 0.2, z: 0.2 },
-      { x: -8.4, z: -3.4 },
+      { x: -1.2, z: 1.5 },
+      { x: 2.4, z: 1.15 },
+      { x: 3.6, z: 3.2 },
+      { x: -3.4, z: 2.5 },
+      { x: 0.2, z: 5.3 },
     ],
   };
 
+  function applyTheme(night) {
+    C.floor.color.set(night ? 0x323846 : 0xe4e7ee);
+    C.rug.color.set(night ? 0x3a4154 : 0xd5dbe6);
+    C.wall.color.set(night ? 0x2a303c : 0xf7f8fb);
+    C.floorEdge.color.set(night ? 0x262b36 : 0xcfd4de);
+    C.trim.color.set(night ? 0x3a4150 : 0xd5dae3);
+    C.desk.color.set(night ? 0xd5dae4 : 0xffffff);
+    exterior.winMat.emissiveIntensity = night ? 0.95 : 0.4;
+    office.tvMat.emissiveIntensity = night ? 0.7 : 0.25;
+    office.wallScreen.emissiveIntensity = night ? 0.75 : 0.35;
+  }
+
   return {
+    interior,
+    exterior: exterior.group,
+    floor3: floors[2],
     spots,
-    animate(time, gaming) {
-      tvMat.emissiveIntensity = gaming ? 0.75 + Math.sin(time * 5) * 0.28 : 0.16;
-      vendingLightMat.emissiveIntensity = 0.35 + (Math.sin(time * 2.4) * 0.5 + 0.5) * 0.7;
-      for (let i = 0; i < leaves.length; i++) {
-        leaves[i].rotation.z = Math.sin(time * 0.8 + i * 1.7) * 0.035;
-      }
-    },
+    applyTheme,
+    tvMat: office.tvMat,
   };
 }
