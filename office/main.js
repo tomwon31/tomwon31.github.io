@@ -50,6 +50,7 @@ const cam = {
   azimuth: Math.PI / 4,
   targetAzimuth: Math.PI / 4,
   zoom: 1,
+  targetZoom: 1,
   focus: new THREE.Vector3(0.2, FLOOR_Y[0] + 1.2, -0.2),
   tween: null,
   floor: 1,
@@ -116,7 +117,7 @@ function selectFloor(id, seconds) {
   cam.floor = id;
   cam.exterior = false;
   document.getElementById('btn-building').classList.remove('on');
-  document.querySelectorAll('.floors button').forEach((btn) => {
+  document.querySelectorAll('.floors button[data-floor]').forEach((btn) => {
     btn.classList.toggle('on', Number(btn.dataset.floor) === id);
   });
   const meta = ['', '大堂', '阅览', '办公'][id];
@@ -125,12 +126,35 @@ function selectFloor(id, seconds) {
   renderRoster();
 }
 
-document.querySelectorAll('.floors button').forEach((btn) => {
+document.querySelectorAll('.floors button[data-floor]').forEach((btn) => {
   btn.addEventListener('click', () => selectFloor(Number(btn.dataset.floor)));
 });
 document.getElementById('btn-building').addEventListener('click', () => showExterior(!cam.exterior));
+document.getElementById('btn-reset').addEventListener('click', () => {
+  cam.targetAzimuth = Math.PI / 4;
+  cam.targetZoom = cam.exterior ? 0.46 : 1;
+  if (cam.exterior) tweenTo(new THREE.Vector3(0, 11.2, 0), 0.46, 0.7);
+  else tweenTo(floorFocus(cam.floor - 1), 1, 0.7);
+});
 document.getElementById('btn-day').addEventListener('click', () => setNight(false));
 document.getElementById('btn-night').addEventListener('click', () => setNight(true));
+
+function bindPanel(id, key) {
+  const panel = document.getElementById(id);
+  const btn = panel.querySelector('.collapse');
+  const apply = (collapsed) => {
+    panel.classList.toggle('collapsed', collapsed);
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  };
+  apply(localStorage.getItem(key) === '0');
+  btn.addEventListener('click', () => {
+    const collapsed = !panel.classList.contains('collapsed');
+    apply(collapsed);
+    localStorage.setItem(key, collapsed ? '0' : '1');
+  });
+}
+bindPanel('panel-floors', 'office-panel-floors');
+bindPanel('panel-roster', 'office-panel-roster');
 
 function setNight(night) {
   cam.night = night;
@@ -146,26 +170,51 @@ function setNight(night) {
   world.applyTheme(night);
 }
 
-let dragging = false;
-let lastX = 0;
+const pointers = new Map();
+let pinchBase = 0;
+let pinchZoom = 1;
+const ZOOM_MIN = 0.38;
+const ZOOM_MAX = 2.4;
+
+function clampZoom(value) {
+  return THREE.MathUtils.clamp(value, ZOOM_MIN, ZOOM_MAX);
+}
+
 renderer.domElement.addEventListener('pointerdown', (event) => {
-  dragging = true;
-  lastX = event.clientX;
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  renderer.domElement.setPointerCapture(event.pointerId);
 });
-window.addEventListener('pointerup', () => { dragging = false; });
-window.addEventListener('pointermove', (event) => {
-  if (!dragging) return;
-  const dx = event.clientX - lastX;
-  lastX = event.clientX;
-  cam.targetAzimuth = THREE.MathUtils.clamp(cam.azimuth + dx * 0.005, Math.PI / 4 - 0.55, Math.PI / 4 + 0.55);
-  cam.azimuth = cam.targetAzimuth;
+function endPointer(event) {
+  pointers.delete(event.pointerId);
+  if (pointers.size < 2) pinchBase = 0;
+}
+renderer.domElement.addEventListener('pointerup', endPointer);
+renderer.domElement.addEventListener('pointercancel', endPointer);
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!pointers.has(event.pointerId)) return;
+  const prev = pointers.get(event.pointerId);
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pointers.size >= 2) {
+    const pts = [...pointers.values()];
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (!pinchBase) {
+      pinchBase = dist;
+      pinchZoom = cam.targetZoom;
+    } else if (pinchBase > 0) {
+      cam.targetZoom = clampZoom(pinchZoom * (dist / pinchBase));
+      if (cam.tween) cam.tween = null;
+    }
+    return;
+  }
+  const dx = event.clientX - prev.x;
+  cam.targetAzimuth += dx * 0.008;
+  if (cam.tween) cam.tween = null;
 });
 renderer.domElement.addEventListener('wheel', (event) => {
   event.preventDefault();
-  if (cam.exterior) return;
-  const next = THREE.MathUtils.clamp(cam.zoom * (event.deltaY > 0 ? 0.92 : 1.08), 0.72, 1.55);
-  cam.zoom = next;
-  if (cam.tween) cam.tween.toZoom = next;
+  const factor = event.deltaY > 0 ? 0.92 : 1.08;
+  cam.targetZoom = clampZoom(cam.targetZoom * factor);
+  if (cam.tween) cam.tween.toZoom = cam.targetZoom;
 }, { passive: false });
 
 renderer.domElement.addEventListener('webglcontextlost', (event) => {
@@ -288,8 +337,12 @@ function frame(now) {
     const k = smoothstep(Math.min(1, cam.tween.t));
     cam.focus.lerpVectors(cam.tween.from, cam.tween.to, k);
     cam.zoom = cam.tween.fromZoom + (cam.tween.toZoom - cam.tween.fromZoom) * k;
+    cam.targetZoom = cam.zoom;
     if (cam.tween.t >= 1) cam.tween = null;
+  } else {
+    cam.zoom += (cam.targetZoom - cam.zoom) * Math.min(1, dt * 8);
   }
+  cam.azimuth += (cam.targetAzimuth - cam.azimuth) * Math.min(1, dt * 8);
   const showShell = cam.exterior && cam.zoom < 0.62;
   world.interior.visible = !showShell;
   world.exterior.visible = showShell;

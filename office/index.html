@@ -31,6 +31,7 @@
       <button type="button" id="btn-night">夜间</button>
     </div>
     <button type="button" id="btn-building" class="ghost">大楼</button>
+    <button type="button" id="btn-reset" class="ghost">复位</button>
     <div id="tallies" class="tallies" aria-live="polite">
       <span class="dot work">工作 0</span>
       <span class="dot wait">等待 0</span>
@@ -38,17 +39,31 @@
       <span class="dot idle">空闲 0</span>
     </div>
   </header>
-  <nav class="floors panel" aria-label="楼层">
-    <h2>楼层</h2>
-    <button type="button" data-floor="3" class="on"><b>3F</b><span>办公</span></button>
-    <button type="button" data-floor="2"><b>2F</b><span>阅览</span></button>
-    <button type="button" data-floor="1"><b>1F</b><span>大堂</span></button>
+  <nav id="panel-floors" class="floors panel" aria-label="楼层">
+    <div class="panel-bar">
+      <h2>楼层</h2>
+      <button type="button" class="collapse" aria-expanded="true" aria-controls="floors-body" aria-label="收起楼层">‹</button>
+    </div>
+    <div class="panel-body" id="floors-body">
+      <div class="panel-inner">
+        <button type="button" data-floor="3" class="on"><b>3F</b><span>办公</span></button>
+        <button type="button" data-floor="2"><b>2F</b><span>阅览</span></button>
+        <button type="button" data-floor="1"><b>1F</b><span>大堂</span></button>
+      </div>
+    </div>
   </nav>
-  <aside class="roster panel" aria-live="polite">
-    <h2 id="roster-title">3F · 本层机器人</h2>
-    <ul id="roster"></ul>
+  <aside id="panel-roster" class="roster panel" aria-live="polite">
+    <div class="panel-bar">
+      <h2 id="roster-title">3F · 本层机器人</h2>
+      <button type="button" class="collapse" aria-expanded="true" aria-controls="roster-body" aria-label="收起机器人列表">›</button>
+    </div>
+    <div class="panel-body" id="roster-body">
+      <div class="panel-inner">
+        <ul id="roster"></ul>
+      </div>
+    </div>
   </aside>
-  <p class="hint">拖拽旋转 · 滚轮缩放</p>
+  <p class="hint">拖拽环绕 · 滚轮缩放 · 双指缩放</p>
   <noscript><p class="panel hint-block">需要启用 JavaScript 才能查看办公室。</p></noscript>
   <script type="module">
     import('./main.js').catch(() => {

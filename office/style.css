@@ -117,15 +117,60 @@ body.night .ghost.on { background: #f2f4f8; color: #1d2430; }
   position: fixed;
   z-index: 5;
   top: 84px;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.28s ease;
 }
-.floors { left: 16px; width: 176px; padding: 12px; }
+.floors { left: 16px; width: 176px; padding: 10px; }
 .roster {
   right: 16px;
   width: 280px;
   max-height: calc(100vh - 110px);
-  padding: 14px 12px 10px;
-  overflow: auto;
+  padding: 10px 10px 8px;
 }
+.panel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 32px;
+}
+.collapse {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(120, 130, 150, 0.16);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.panel-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.28s ease, opacity 0.22s ease;
+}
+.panel-inner { min-height: 0; overflow: hidden; }
+.floors.collapsed,
+.roster.collapsed { width: 48px; }
+.floors.collapsed .panel-body,
+.roster.collapsed .panel-body {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+.floors.collapsed h2,
+.roster.collapsed h2 {
+  opacity: 0;
+  width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.roster { overflow: auto; }
+.roster.collapsed { overflow: hidden; }
 .floors h2, .roster h2 {
   margin: 2px 8px 8px;
   font-size: 12px;

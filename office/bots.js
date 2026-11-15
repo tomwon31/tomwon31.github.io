@@ -12,7 +12,7 @@ const DEFAULTS = {
   '额der': { shape: 'rounded_square', color: '#B5B5B5', tilt: -8, accessory: 'none' },
   'momo(model connect)': { shape: 'star', color: '#3DDC5A', tilt: 0, accessory: 'none' },
   'Gemini Bot': { shape: 'cloud', color: '#1E6FFF', tilt: 0, accessory: 'none' },
-  '水滴道长': { shape: 'drop', color: '#F2F2F2', tilt: -18, accessory: 'none' },
+  '水滴道长': { shape: 'drop', color: '#FFFFFF', tilt: 0, accessory: 'none' },
   '章鱼哥': { shape: 'rounded_square', color: '#F2F2F2', tilt: 18, accessory: 'none' },
 };
 
@@ -21,7 +21,7 @@ const FALLBACK_COLORS = ['#8F59F9', '#F2F2F2', '#B5B5B5', '#3DDC5A', '#1E6FFF', 
 const sphere = new THREE.SphereGeometry(1, 16, 12);
 const eyeGeo = new THREE.SphereGeometry(1, 8, 6);
 const eyeMat = new THREE.MeshBasicMaterial({ color: 0x241c22 });
-const outlineMat = new THREE.MeshBasicMaterial({ color: 0x8d8d8d, side: THREE.BackSide });
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0xd2d2d2, side: THREE.BackSide });
 const ink = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
 const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const bookMat = new THREE.MeshLambertMaterial({ color: 0xc4554a });
@@ -95,14 +95,26 @@ geos.cloud = puffyExtrude(smoothClosed(cloudPoints()), 0.16);
 
 function dropGeometry() {
   const pts = [];
-  const n = 14;
+  const n = 24;
+  const tip = 0.78;
+  const belly = 0.3;
   for (let i = 0; i <= n; i++) {
     const t = i / n;
-    const y = THREE.MathUtils.lerp(0.55, -0.4, t);
-    const bulge = Math.sin(Math.pow(t, 0.5) * Math.PI);
-    pts.push(new THREE.Vector2(0.015 + bulge * 0.38, y));
+    let y;
+    let r;
+    if (t < 0.58) {
+      const u = t / 0.58;
+      y = tip + (0 - tip) * u;
+      r = Math.sin(u * Math.PI * 0.5) * belly;
+    } else {
+      const u = (t - 0.58) / 0.42;
+      const ang = u * Math.PI * 0.5;
+      y = -Math.sin(ang) * belly;
+      r = Math.cos(ang) * belly;
+    }
+    pts.push(new THREE.Vector2(Math.max(0.001, r), y));
   }
-  return new THREE.LatheGeometry(pts, 16);
+  return new THREE.LatheGeometry(pts, 20);
 }
 geos.drop = dropGeometry();
 
@@ -132,7 +144,7 @@ function addOutline(mesh) {
   const shell = new THREE.Mesh(mesh.geometry, outlineMat);
   shell.position.copy(mesh.position);
   shell.rotation.copy(mesh.rotation);
-  shell.scale.copy(mesh.scale).multiplyScalar(1.045);
+  shell.scale.copy(mesh.scale).multiplyScalar(1.02);
   mesh.parent.add(shell);
 }
 
@@ -186,11 +198,11 @@ function makeShape(shape, material, light) {
     eyeZ = 0.32;
     height = 0.9;
   } else if (shape === 'drop') {
-    addMesh(geos.drop, 0, 0, 0);
+    addMesh(geos.drop, 0, 0.06, 0);
     eyeY = 0.06;
-    eyeZ = 0.38;
-    height = 0.95;
-    sep = 0.1;
+    eyeZ = 0.33;
+    height = 1.15;
+    sep = 0.08;
   } else if (shape === 'hexagon') {
     const mesh = addMesh(geos.hex, 0, 0, 0);
     mesh.rotation.x = Math.PI / 2;
@@ -305,6 +317,7 @@ class Bot {
     this.screen = desk.screen;
     this.sitX = desk.sitX;
     this.sitZ = desk.sitZ;
+    this.deskYaw = slot.rot + Math.PI;
 
     this.root = new THREE.Group();
     this.root.position.set(this.sitX, this.floorY, this.sitZ);
@@ -527,7 +540,7 @@ class Bot {
     if (spots.read.some((s) => !s.taken)) options.push('read', 'read');
     if (spots.game.some((s) => !s.taken)) options.push('game', 'game');
     let type = options[(Math.random() * options.length) | 0];
-    this.until = time + 150 + Math.random() * 90;
+    this.until = time + (6.5 + Math.random() * 2.5) * 60;
     this.chatting = false;
     if (type !== 'wander') {
       const slot = spots[type].find((s) => !s.taken);
@@ -569,7 +582,7 @@ class Bot {
       if (dx * dx + dz * dz > 0.0004) this.goalFace = Math.atan2(dx, dz);
       if (t >= 1) this.arrive();
     } else if (this.status !== 'idle') {
-      this.goalFace = faceYaw;
+      this.goalFace = this.deskYaw;
     } else if (this.activity === 'wander' && this.mode === 'act') {
       this.pause -= dt;
       let partner = null;
