@@ -1,0 +1,40 @@
+{
+  "updated": "2026-11-15T14:00:00.000Z",
+  "bots": [
+    {
+      "name": "T",
+      "status": "busy",
+      "note": "搭建 3D 办公室页面"
+    },
+    {
+      "name": "Lin",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "额der",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "momo(model connect)",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "Gemini Bot",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "水滴道长",
+      "status": "idle",
+      "note": ""
+    },
+    {
+      "name": "章鱼哥",
+      "status": "idle",
+      "note": ""
+    }
+  ]
+}
