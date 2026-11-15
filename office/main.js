@@ -137,12 +137,12 @@ function setNight(night) {
   document.body.classList.toggle('night', night);
   document.getElementById('btn-day').classList.toggle('on', !night);
   document.getElementById('btn-night').classList.toggle('on', night);
-  scene.background.set(night ? 0x070b14 : 0xe7ebf0);
-  hemi.intensity = night ? 0.16 : 0.95;
-  hemi.color.set(night ? 0x1a2744 : 0xffffff);
-  hemi.groundColor.set(night ? 0x0c1018 : 0xd5dae3);
-  sun.intensity = night ? 0.05 : 0.72;
-  sun.color.set(night ? 0x6a7a9a : 0xfffaf3);
+  scene.background.set(night ? 0x070b14 : 0xe9eef3);
+  hemi.intensity = night ? 0.88 : 1.05;
+  hemi.color.set(night ? 0xffe6c2 : 0xfff8ef);
+  hemi.groundColor.set(night ? 0x8d6b4e : 0xd8d0c4);
+  sun.intensity = night ? 0.42 : 0.82;
+  sun.color.set(night ? 0xffd7a4 : 0xfffaf3);
   world.applyTheme(night);
 }
 
@@ -293,6 +293,18 @@ function frame(now) {
   const showShell = cam.exterior && cam.zoom < 0.62;
   world.interior.visible = !showShell;
   world.exterior.visible = showShell;
+  if (cam.night && showShell) {
+    hemi.intensity = 0.08;
+    hemi.color.set(0x1a2740);
+    hemi.groundColor.set(0x070b14);
+    sun.intensity = 0.04;
+  } else if (cam.night) {
+    hemi.intensity = 0.88;
+    hemi.color.set(0xffe6c2);
+    hemi.groundColor.set(0x8d6b4e);
+    sun.intensity = 0.42;
+    sun.color.set(0xffd7a4);
+  }
 
   sim.update(dt, now / 1000, cam.azimuth, !showShell && cam.floor === 3, cam.night, !showShell);
   world.animate(now / 1000, cam.night);

@@ -29,7 +29,9 @@ const cyl = new THREE.CylinderGeometry(1, 1, 1, 10);
 const sphere = new THREE.SphereGeometry(1, 12, 10);
 const plane = new THREE.PlaneGeometry(1, 1);
 const circle = new THREE.CircleGeometry(1, 16);
-const deskTop = new RoundedBoxGeometry(1.46, 0.08, 0.72, 2, 0.1);
+const deskTop = new RoundedBoxGeometry(1.5, 0.09, 0.74, 2, 0.12);
+const chairSeat = new RoundedBoxGeometry(0.48, 0.09, 0.44, 2, 0.04);
+const chairBack = new RoundedBoxGeometry(0.46, 0.5, 0.08, 2, 0.04);
 
 const cache = new Map();
 function mat(color, extras) {
@@ -94,6 +96,22 @@ function canvasTex(w, h, draw) {
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+const floorTex = canvasTex(128, 128, (ctx, w, h) => {
+  ctx.fillStyle = '#f3f5f8';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(170, 178, 190, 0.28)';
+  for (let y = 6; y < h; y += 16) {
+    for (let x = 6; x < w; x += 16) ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.strokeStyle = 'rgba(190, 198, 210, 0.55)';
+  ctx.strokeRect(1, 1, w - 2, h - 2);
+});
+floorTex.wrapS = THREE.RepeatWrapping;
+floorTex.wrapT = THREE.RepeatWrapping;
+floorTex.repeat.set(5, 3.5);
+C.floor.map = floorTex;
+C.floor.needsUpdate = true;
 
 const chartTex = canvasTex(160, 96, (ctx, w, h) => {
   ctx.fillStyle = '#f4f7fb';
@@ -265,8 +283,8 @@ export function createDesk(parent, slot) {
   mug(desk, 0.48, 0.84, -0.22);
   place(cyl, C.black, desk, -0.52, 0.96, -0.12, 0.012, 0.32, 0.012);
   place(sphere, C.bulb, desk, -0.52, 1.14, -0.12, 0.055, 0.045, 0.055);
-  place(box, C.chair, desk, 0, 0.46, 0.62, 0.42, 0.07, 0.4);
-  place(box, C.chair, desk, 0, 0.72, 0.8, 0.42, 0.42, 0.06);
+  place(chairSeat, C.chair, desk, 0, 0.46, 0.62);
+  place(chairBack, C.chair, desk, 0, 0.74, 0.8);
   place(cyl, C.black, desk, 0, 0.24, 0.62, 0.04, 0.4, 0.04);
   place(cyl, C.black, desk, 0, 0.05, 0.62, 0.18, 0.04, 0.18);
   shadow(desk, 0, 0.2, 0.7);
@@ -459,21 +477,21 @@ export function buildWorld(scene) {
   };
 
   function applyTheme(night) {
-    C.floor.color.set(night ? 0x2a3140 : 0xe4e7ee);
-    C.rug.color.set(night ? 0x343c4e : 0xd5dbe6);
-    C.wall.color.set(night ? 0x232833 : 0xf7f8fb);
-    C.floorEdge.color.set(night ? 0x1e2430 : 0xcfd4de);
-    C.trim.color.set(night ? 0x323846 : 0xd5dae3);
-    C.desk.color.set(night ? 0xd7dce6 : 0xffffff);
-    C.bulb.emissiveIntensity = night ? 1.35 : 0.04;
-    C.pool.opacity = night ? 0.42 : 0;
+    C.floor.color.set(night ? 0x6b5e54 : 0xf0f2f6);
+    C.rug.color.set(night ? 0x7a6758 : 0xd8cfc3);
+    C.wall.color.set(night ? 0x73685e : 0xfbfcfe);
+    C.floorEdge.color.set(night ? 0x4e463f : 0xcfd4de);
+    C.trim.color.set(night ? 0x5c534a : 0xd5dae3);
+    C.desk.color.set(night ? 0xf3f1ec : 0xffffff);
+    C.bulb.emissiveIntensity = night ? 2.4 : 0.08;
+    C.pool.opacity = night ? 0.62 : 0;
     C.steam.opacity = night ? 0.2 : 0.32;
     exterior.winMat.emissive.set(night ? 0xffd089 : 0xf0d7a2);
     exterior.winMat.emissiveIntensity = night ? 1.55 : 0.35;
     exterior.winMat.color.set(night ? 0xffe1b0 : 0x9fb4c8);
     office.tvMat.emissiveIntensity = night ? 1.05 : 0.25;
     office.wallScreen.emissiveIntensity = night ? 1.15 : 0.35;
-    for (let i = 0; i < lights.length; i++) lights[i].intensity = night ? 7.5 : 0;
+    for (let i = 0; i < lights.length; i++) lights[i].intensity = night ? 16 : 0;
   }
 
   function animate(time, night) {

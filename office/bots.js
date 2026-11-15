@@ -42,6 +42,57 @@ const geos = {
   spark: new THREE.SphereGeometry(1, 6, 4),
 };
 
+function smoothClosed(points) {
+  const shape = new THREE.Shape();
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = mid(points[points.length - 1], points[0]);
+  shape.moveTo(start[0], start[1]);
+  for (let i = 0; i < points.length; i++) {
+    const v = points[i];
+    const m = mid(v, points[(i + 1) % points.length]);
+    shape.quadraticCurveTo(v[0], v[1], m[0], m[1]);
+  }
+  return shape;
+}
+
+function puffyExtrude(shape, bevel) {
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.32,
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel * 0.85,
+    bevelSegments: 3,
+    curveSegments: 10,
+  });
+  geo.translate(0, 0, -0.22);
+  return geo;
+}
+
+function starPoints() {
+  const pts = [];
+  const n = 5;
+  for (let i = 0; i < n * 2; i++) {
+    const r = i % 2 === 0 ? 0.56 : 0.2;
+    const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+    pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+  }
+  return pts;
+}
+
+function cloudPoints() {
+  const pts = [];
+  const steps = 72;
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    const rad = 0.3 + 0.11 * Math.cos(6 * a) + 0.03 * Math.cos(3 * a + 0.6);
+    pts.push([Math.cos(a) * rad, Math.sin(a) * rad * 0.86]);
+  }
+  return pts;
+}
+
+geos.star = puffyExtrude(smoothClosed(starPoints()), 0.06);
+geos.cloud = puffyExtrude(smoothClosed(cloudPoints()), 0.16);
+
 function dropGeometry() {
   const pts = [];
   const n = 14;
@@ -81,7 +132,7 @@ function addOutline(mesh) {
   const shell = new THREE.Mesh(mesh.geometry, outlineMat);
   shell.position.copy(mesh.position);
   shell.rotation.copy(mesh.rotation);
-  shell.scale.copy(mesh.scale).multiplyScalar(1.12);
+  shell.scale.copy(mesh.scale).multiplyScalar(1.045);
   mesh.parent.add(shell);
 }
 
@@ -155,34 +206,19 @@ function makeShape(shape, material, light) {
     height = 0.9;
     pitch = -0.5;
   } else if (shape === 'star') {
-    addMesh(sphere, 0, 0, 0, 0.24);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
-      addMesh(sphere, Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0.04, 0.2);
-    }
-    eyeY = 0.34;
-    eyeZ = 0.16;
-    height = 1.0;
-    sep = 0.09;
-    pitch = -0.78;
-  } else if (shape === 'cloud') {
-    addMesh(sphere, 0, 0, 0, 0.26);
-    const lobes = [
-      [0.28, 0.1, 0.2],
-      [-0.26, 0.12, 0.18],
-      [0.06, 0.3, 0.18],
-      [-0.04, -0.26, 0.16],
-      [0.22, -0.14, 0.16],
-      [-0.2, -0.08, 0.15],
-    ];
-    for (let i = 0; i < lobes.length; i++) {
-      addMesh(sphere, lobes[i][0], lobes[i][1], 0.04, lobes[i][2]);
-    }
-    eyeY = 0.32;
-    eyeZ = 0.16;
+    addMesh(geos.star, 0, 0, 0);
+    eyeY = 0.22;
+    eyeZ = 0.28;
     height = 1.05;
-    sep = 0.09;
-    pitch = -0.75;
+    sep = 0.1;
+    pitch = -0.5;
+  } else if (shape === 'cloud') {
+    addMesh(geos.cloud, 0, 0, 0);
+    eyeY = 0.2;
+    eyeZ = 0.26;
+    height = 0.9;
+    sep = 0.1;
+    pitch = -0.48;
   } else {
     addMesh(geos.rounded, 0, 0, 0);
     eyeY = 0.16;
@@ -343,7 +379,14 @@ class Bot {
         }
       });
     }
-    const material = new THREE.MeshLambertMaterial({ color: look.color });
+    const glossy = look.shape === 'sphere' || luminance(look.color) > 0.8;
+    const color = new THREE.Color(look.color);
+    const material = new THREE.MeshPhongMaterial({
+      color,
+      specular: glossy ? 0xffffff : 0x9aa3b2,
+      shininess: glossy ? 78 : 22,
+      emissive: color.clone().multiplyScalar(glossy ? 0.05 : 0.12),
+    });
     const built = makeShape(look.shape, material, luminance(look.color) > 0.62);
     this.shapeGroup = built.group;
     this.hoverY = built.hover;
