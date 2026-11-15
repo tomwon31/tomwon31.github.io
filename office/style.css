@@ -158,8 +158,10 @@ body.night .ghost.on { background: #f2f4f8; color: #1d2430; }
   color: var(--muted);
 }
 .floors button.on,
+.floors button.on b,
 .floors button.on span { color: #fff; }
 body.night .floors button.on,
+body.night .floors button.on b,
 body.night .floors button.on span,
 body.night .seg button.on,
 body.night .ghost.on { color: #1d2430; }
