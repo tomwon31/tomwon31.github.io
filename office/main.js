@@ -137,11 +137,12 @@ function setNight(night) {
   document.body.classList.toggle('night', night);
   document.getElementById('btn-day').classList.toggle('on', !night);
   document.getElementById('btn-night').classList.toggle('on', night);
-  scene.background.set(night ? 0x12151c : 0xe7ebf0);
-  hemi.intensity = night ? 0.38 : 0.95;
-  hemi.color.set(night ? 0x8aa0c0 : 0xffffff);
-  hemi.groundColor.set(night ? 0x1a1e28 : 0xd5dae3);
-  sun.intensity = night ? 0.28 : 0.72;
+  scene.background.set(night ? 0x070b14 : 0xe7ebf0);
+  hemi.intensity = night ? 0.16 : 0.95;
+  hemi.color.set(night ? 0x1a2744 : 0xffffff);
+  hemi.groundColor.set(night ? 0x0c1018 : 0xd5dae3);
+  sun.intensity = night ? 0.05 : 0.72;
+  sun.color.set(night ? 0x6a7a9a : 0xfffaf3);
   world.applyTheme(night);
 }
 
@@ -294,6 +295,7 @@ function frame(now) {
   world.exterior.visible = showShell;
 
   sim.update(dt, now / 1000, cam.azimuth, !showShell && cam.floor === 3, cam.night, !showShell);
+  world.animate(now / 1000, cam.night);
   applyCamera();
   renderer.render(scene, camera);
   labels.render(scene, camera);
