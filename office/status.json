@@ -4,37 +4,65 @@
     {
       "name": "T",
       "status": "busy",
-      "note": "搭建 3D 办公室页面"
+      "note": "搭建 3D 办公室页面",
+      "shape": "rounded_square",
+      "color": "#8F59F9",
+      "tilt": 12,
+      "accessory": "none"
     },
     {
       "name": "Lin",
       "status": "idle",
-      "note": ""
+      "note": "",
+      "shape": "sphere",
+      "color": "#F2F2F2",
+      "tilt": 0,
+      "accessory": "none"
     },
     {
       "name": "额der",
       "status": "idle",
-      "note": ""
+      "note": "",
+      "shape": "rounded_square",
+      "color": "#B5B5B5",
+      "tilt": -8,
+      "accessory": "none"
     },
     {
       "name": "momo(model connect)",
       "status": "idle",
-      "note": ""
+      "note": "",
+      "shape": "star",
+      "color": "#3DDC5A",
+      "tilt": 0,
+      "accessory": "none"
     },
     {
       "name": "Gemini Bot",
       "status": "idle",
-      "note": ""
+      "note": "",
+      "shape": "cloud",
+      "color": "#1E6FFF",
+      "tilt": 0,
+      "accessory": "none"
     },
     {
       "name": "水滴道长",
       "status": "idle",
-      "note": ""
+      "note": "",
+      "shape": "drop",
+      "color": "#F2F2F2",
+      "tilt": -18,
+      "accessory": "none"
     },
     {
       "name": "章鱼哥",
       "status": "idle",
-      "note": ""
+      "note": "",
+      "shape": "rounded_square",
+      "color": "#F2F2F2",
+      "tilt": 18,
+      "accessory": "none"
     }
   ]
 }

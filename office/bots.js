@@ -1,341 +1,362 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import {
-  SLOTS,
-  LOUNGE,
-  geos,
-  mat,
-  mats,
-  tint,
-  place,
-  makeScreenMaterial,
-} from './world.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { DESK_SLOTS, FLOOR_Y, createDesk } from './world.js';
 
-const NAMED = {
-  T: { color: 0x4c8dff, accessory: 'antenna' },
-  Lin: { color: 0xff6fa3, accessory: 'bow' },
-  '额der': { color: 0xffb703, accessory: 'glasses' },
-  'momo(model connect)': { color: 0x3dcf8e, accessory: 'phones' },
-  'Gemini Bot': { color: 0x7c6af7, accessory: 'visor' },
-  '水滴道长': { color: 0x2ec5e0, accessory: 'hat' },
-  '章鱼哥': { color: 0xef5d4c, accessory: 'tentacles' },
+const SHAPES = ['cube', 'rounded_square', 'sphere', 'pill', 'star', 'cone', 'drop', 'diamond', 'cloud', 'hexagon', 'triangle', 'bubble'];
+const EXTRAS = ['none', 'glasses', 'antenna', 'bow'];
+
+const DEFAULTS = {
+  T: { shape: 'rounded_square', color: '#8F59F9', tilt: 12, accessory: 'none' },
+  Lin: { shape: 'sphere', color: '#F2F2F2', tilt: 0, accessory: 'none' },
+  '额der': { shape: 'rounded_square', color: '#B5B5B5', tilt: -8, accessory: 'none' },
+  'momo(model connect)': { shape: 'star', color: '#3DDC5A', tilt: 0, accessory: 'none' },
+  'Gemini Bot': { shape: 'cloud', color: '#1E6FFF', tilt: 0, accessory: 'none' },
+  '水滴道长': { shape: 'drop', color: '#F2F2F2', tilt: -18, accessory: 'none' },
+  '章鱼哥': { shape: 'rounded_square', color: '#F2F2F2', tilt: 18, accessory: 'none' },
 };
 
-const EXTRA_COLORS = [0xf4a261, 0x90be6d, 0xb5838d, 0x48bfe3, 0xe9c46a, 0x00bbf9];
-const CHAT = ['…', '😄', '👋', '✨', '☕', '嘿嘿'];
-const ACTIVITY_MIN = 150;
-const ACTIVITY_SPAN = 90;
+const FALLBACK_COLORS = ['#8F59F9', '#F2F2F2', '#B5B5B5', '#3DDC5A', '#1E6FFF', '#FFB703', '#E23D3D', '#2EC5E0'];
 
-const eyeWhite = mat(0xfffdf8);
-const pupil = mat(0x1b1f27);
-const ink = mat(0x2b3038);
-const gold = mat(0xf2c14e);
+const sphere = new THREE.SphereGeometry(1, 16, 12);
+const eyeGeo = new THREE.SphereGeometry(1, 8, 6);
+const eyeMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x8d8d8d, side: THREE.BackSide });
+const ink = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
+const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const bookMat = new THREE.MeshLambertMaterial({ color: 0xc4554a });
+const pageMat = new THREE.MeshLambertMaterial({ color: 0xfffdf8 });
+const snackMat = new THREE.MeshLambertMaterial({ color: 0xe07a3d });
+const padMat = new THREE.MeshLambertMaterial({ color: 0x242833 });
 
-function yawToward(dx, dz) {
-  return Math.atan2(-dx, -dz);
-}
+const geos = {
+  cube: new RoundedBoxGeometry(0.74, 0.74, 0.74, 2, 0.1),
+  rounded: new RoundedBoxGeometry(0.78, 0.78, 0.78, 3, 0.2),
+  sphere,
+  pill: new THREE.CapsuleGeometry(0.28, 0.34, 4, 8),
+  cone: new THREE.ConeGeometry(0.4, 0.78, 14),
+  diamond: new THREE.OctahedronGeometry(0.48, 0),
+  hex: new THREE.CylinderGeometry(0.42, 0.42, 0.36, 6),
+  tri: new THREE.CylinderGeometry(0.46, 0.46, 0.34, 3),
+  torus: new THREE.TorusGeometry(0.11, 0.02, 6, 10),
+  spark: new THREE.SphereGeometry(1, 6, 4),
+};
 
-function insideLounge(x, z) {
-  return x > LOUNGE.minX && x < LOUNGE.maxX && z > LOUNGE.minZ && z < LOUNGE.maxZ;
-}
-
-function segmentHitsLounge(x0, z0, x1, z1) {
-  for (let i = 1; i < 7; i++) {
-    const t = i / 7;
-    if (insideLounge(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return true;
-  }
-  return false;
-}
-
-// Route through the open aisle (x ≈ 2.5) and step out of desk alcoves so
-// bots don't cut through the sofa, TV, or the chair row.
-function buildPath(from, goal) {
+function dropGeometry() {
   const pts = [];
-  let cx = from.x;
-  let cz = from.z;
-  const add = (x, z) => {
-    if (Math.hypot(x - cx, z - cz) > 0.28) {
-      pts.push({ x, z });
-      cx = x;
-      cz = z;
-    }
+  const n = 14;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const y = THREE.MathUtils.lerp(0.55, -0.4, t);
+    const bulge = Math.sin(Math.pow(t, 0.5) * Math.PI);
+    pts.push(new THREE.Vector2(0.015 + bulge * 0.38, y));
+  }
+  return new THREE.LatheGeometry(pts, 16);
+}
+geos.drop = dropGeometry();
+
+function luminance(hex) {
+  const c = new THREE.Color(hex);
+  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+}
+
+function addEyes(parent, z, y, sep) {
+  const left = new THREE.Mesh(eyeGeo, eyeMat);
+  const right = new THREE.Mesh(eyeGeo, eyeMat);
+  left.scale.set(0.07, 0.15, 0.055);
+  right.scale.copy(left.scale);
+  left.position.set(-sep, y, z + 0.05);
+  right.position.set(sep, y, z + 0.05);
+  left.rotation.z = 0.28;
+  right.rotation.z = 0.28;
+  parent.add(left, right);
+}
+
+function addOutline(mesh) {
+  const shell = new THREE.Mesh(mesh.geometry, outlineMat);
+  shell.position.copy(mesh.position);
+  shell.rotation.copy(mesh.rotation);
+  shell.scale.copy(mesh.scale).multiplyScalar(1.12);
+  mesh.parent.add(shell);
+}
+
+function makeShape(shape, material, light) {
+  const group = new THREE.Group();
+  let height = 0.78;
+  let front = 0.36;
+  let eyeY = 0.05;
+  let sep = 0.14;
+
+  const addMesh = (geo, x, y, z, s, rot) => {
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(x, y, z);
+    if (s) mesh.scale.set(s, s, s);
+    if (rot) mesh.rotation.copy(rot);
+    group.add(mesh);
+    if (light) addOutline(mesh);
+    return mesh;
   };
 
-  if (from.z < -5.1) add(from.x, -4.5);
-  else if (from.x > 8.5) add(7.6, from.z);
-  else if (insideLounge(from.x, from.z)) {
-    if (from.x > -5.25) {
-      add(-2.2, from.z);
-      add(-2.2, 0.8);
-    } else if (from.z < 3.3) {
-      add(from.x, 0.8);
-      add(-2.2, 0.8);
-    } else {
-      add(from.x, 5.7);
-      add(-2.2, 5.7);
+  if (shape === 'cube') {
+    addMesh(geos.cube, 0, 0, 0);
+    front = 0.4;
+  } else if (shape === 'rounded_square' || shape === 'rounded') {
+    addMesh(geos.rounded, 0, 0, 0);
+    front = 0.42;
+    height = 0.82;
+  } else if (shape === 'sphere' || shape === 'bubble') {
+    addMesh(sphere, 0, 0, 0, 0.4);
+    if (shape === 'bubble') addMesh(sphere, -0.18, -0.28, 0.05, 0.12);
+    front = 0.36;
+    eyeY = 0.04;
+    height = 0.8;
+  } else if (shape === 'pill') {
+    addMesh(geos.pill, 0, 0, 0);
+    front = 0.3;
+    height = 0.9;
+  } else if (shape === 'cone') {
+    addMesh(geos.cone, 0, 0, 0);
+    front = 0.28;
+    eyeY = 0.05;
+    height = 0.82;
+  } else if (shape === 'diamond') {
+    addMesh(geos.diamond, 0, 0, 0);
+    front = 0.34;
+    height = 0.9;
+  } else if (shape === 'drop') {
+    addMesh(geos.drop, 0, 0, 0);
+    front = 0.36;
+    eyeY = -0.02;
+    height = 0.95;
+    sep = 0.12;
+  } else if (shape === 'hexagon') {
+    const mesh = addMesh(geos.hex, 0, 0, 0);
+    mesh.rotation.x = Math.PI / 2;
+    front = 0.22;
+    height = 0.84;
+  } else if (shape === 'triangle') {
+    const mesh = addMesh(geos.tri, 0, 0, 0);
+    mesh.rotation.x = Math.PI / 2;
+    front = 0.2;
+    height = 0.9;
+  } else if (shape === 'star') {
+    addMesh(sphere, 0, 0, 0, 0.24);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+      addMesh(sphere, Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0, 0.2);
     }
-    add(2.5, cz);
-  }
-
-  if (goal.entry) {
-    const bypassZ = goal.side === 'north' ? 5.55 : 0.95;
-    add(2.5, cz);
-    add(2.5, bypassZ);
-    add(goal.entry.x, bypassZ);
-    add(goal.entry.x, goal.entry.z);
-  } else if (goal.z < -5.1) {
-    add(goal.x, -4.5);
-  } else if (goal.x > 8.5) {
-    add(7.6, goal.z);
-  } else if (segmentHitsLounge(cx, cz, goal.x, goal.z)) {
-    add(2.5, cz);
-    add(2.5, goal.z);
-  }
-
-  add(goal.x, goal.z);
-  return pts;
-}
-
-function createDesk(scene, slot, colorMat) {
-  const desk = new THREE.Group();
-  desk.position.set(slot.x, 0, slot.z);
-  desk.rotation.y = slot.rot;
-  scene.add(desk);
-
-  const topY = 0.74;
-  place(geos.box, mats.deskTop, desk, 0, topY, -0.56, 1.36, 0.07, 0.66);
-  for (const [lx, lz] of [[-0.58, -0.82], [0.58, -0.82], [-0.58, -0.32], [0.58, -0.32]]) {
-    place(geos.box, mats.deskLeg, desk, lx, 0.35, lz, 0.07, 0.7, 0.07);
-  }
-  place(geos.box, colorMat, desk, 0, topY + 0.045, -0.5, 0.5, 0.012, 0.3);
-  place(geos.box, mats.bezel, desk, 0, 1.05, -0.86, 0.66, 0.44, 0.05);
-  const screen = place(geos.plane, mats.screenIdle, desk, 0, 1.055, -0.8, 0.54, 0.32, 1);
-  place(geos.box, mats.bezel, desk, 0, 0.84, -0.86, 0.08, 0.14, 0.06);
-  place(geos.box, mats.keys, desk, -0.04, topY + 0.05, -0.4, 0.36, 0.025, 0.13);
-  place(geos.box, mats.bezel, desk, 0.32, topY + 0.046, -0.42, 0.07, 0.02, 0.1);
-
-  const cz = 0.28;
-  place(geos.box, mats.chair, desk, 0, 0.48, cz, 0.46, 0.08, 0.44);
-  place(geos.box, mats.chair, desk, 0, 0.74, cz + 0.2, 0.46, 0.46, 0.07);
-  place(geos.cyl, mats.chairBase, desk, 0, 0.24, cz, 0.045, 0.4, 0.045);
-  place(geos.cyl, mats.chairBase, desk, 0, 0.04, cz, 0.2, 0.045, 0.2);
-
-  desk.updateMatrix();
-  const sit = new THREE.Vector3(0, 0, cz).applyMatrix4(desk.matrix);
-  return { desk, screen, sit };
-}
-
-function addAccessory(type, head, bodyMat, color) {
-  const extra = { type, tentacles: null, antenna: null };
-  if (type === 'antenna') {
-    const antenna = new THREE.Group();
-    antenna.position.set(0, 0.16, 0);
-    head.add(antenna);
-    place(geos.cyl, ink, antenna, 0, 0.1, 0, 0.012, 0.2, 0.012);
-    place(geos.sphere, gold, antenna, 0, 0.22, 0, 0.045, 0.045, 0.045);
-    extra.antenna = antenna;
-  } else if (type === 'bow') {
-    place(geos.sphere, mat(0xff4d88), head, -0.1, 0.14, -0.02, 0.07, 0.05, 0.04);
-    place(geos.sphere, mat(0xff4d88), head, 0.1, 0.14, -0.02, 0.07, 0.05, 0.04);
-    place(geos.sphere, gold, head, 0, 0.14, 0.01, 0.035, 0.035, 0.035);
-  } else if (type === 'glasses') {
-    const left = place(geos.ring, ink, head, -0.065, 0.02, -0.15, 1, 1, 1);
-    const right = place(geos.ring, ink, head, 0.065, 0.02, -0.15, 1, 1, 1);
-    left.rotation.y = 0.15;
-    right.rotation.y = -0.15;
-    place(geos.box, ink, head, 0, 0.02, -0.155, 0.05, 0.012, 0.012);
-  } else if (type === 'phones') {
-    const band = place(geos.torus, ink, head, 0, 0.04, 0, 0.16, 0.16, 0.16);
-    place(geos.sphere, ink, head, -0.16, 0.0, 0, 0.055, 0.07, 0.05);
-    place(geos.sphere, ink, head, 0.16, 0.0, 0, 0.055, 0.07, 0.05);
-  } else if (type === 'visor') {
-    const visor = place(geos.box, mat(tint(color, 0xffffff, 0.35)), head, 0, 0.02, -0.15, 0.24, 0.07, 0.04);
-    visor.material = new THREE.MeshLambertMaterial({
-      color: tint(color, 0xffffff, 0.55),
-      emissive: new THREE.Color(color),
-      emissiveIntensity: 0.35,
-    });
-  } else if (type === 'hat') {
-    place(geos.cyl, mat(0x16343a), head, 0, 0.16, 0, 0.16, 0.08, 0.16);
-    place(geos.cyl, mat(0x10282e), head, 0, 0.26, 0, 0.1, 0.16, 0.1);
-  } else if (type === 'tentacles') {
-    extra.tentacles = [];
-    const spots = [[-0.12, -0.02, 0.08], [0.12, -0.02, 0.08], [0, -0.04, 0.14]];
-    for (let i = 0; i < spots.length; i++) {
-      const pivot = new THREE.Group();
-      pivot.position.set(spots[i][0], spots[i][1], spots[i][2]);
-      head.add(pivot);
-      place(geos.limb, mat(tint(color, 0x000000, 0.25)), pivot, 0, -0.12, 0, 0.7, 0.85, 0.7);
-      extra.tentacles.push(pivot);
+    front = 0.26;
+    height = 1.0;
+    sep = 0.1;
+  } else if (shape === 'cloud') {
+    addMesh(sphere, 0, 0, 0, 0.26);
+    const lobes = [
+      [0.28, 0.08, 0.2],
+      [-0.26, 0.1, 0.18],
+      [0.08, 0.3, 0.18],
+      [-0.06, -0.28, 0.17],
+      [0.22, -0.16, 0.16],
+      [-0.22, -0.12, 0.15],
+    ];
+    for (let i = 0; i < lobes.length; i++) {
+      addMesh(sphere, lobes[i][0], lobes[i][1], 0.02, lobes[i][2]);
     }
+    front = 0.28;
+    height = 1.05;
+    sep = 0.1;
+  } else {
+    addMesh(geos.rounded, 0, 0, 0);
+    front = 0.4;
   }
-  return extra;
+
+  addEyes(group, front, eyeY, sep);
+  return { group, hover: height * 0.5 + 0.52, ground: height * 0.46, half: height * 0.5 };
 }
 
-function makeCharacter(color, accessory) {
-  const root = new THREE.Group();
-  const body = new THREE.Group();
-  root.add(body);
-
-  const bodyMat = mat(color);
-  const headMat = mat(tint(color, 0xffffff, 0.1));
-  const limbMat = mat(tint(color, 0x000000, 0.18));
-
-  const torso = new THREE.Mesh(geos.torso, bodyMat);
-  torso.position.y = 0.72;
-  body.add(torso);
-
-  const head = new THREE.Mesh(geos.head, headMat);
-  head.position.y = 1.05;
-  body.add(head);
-
-  const eyeL = new THREE.Mesh(geos.eye, eyeWhite);
-  eyeL.position.set(-0.07, 0.025, -0.155);
-  const eyeR = eyeL.clone();
-  eyeR.position.x = 0.07;
-  const pL = new THREE.Mesh(geos.pupil, pupil);
-  pL.position.set(0, 0, -0.04);
-  const pR = pL.clone();
-  eyeL.add(pL);
-  eyeR.add(pR);
-  head.add(eyeL, eyeR);
-
-  // Capsule half-extent in Y before scale. scaleY stretches it; feet land on y=0.
-  const limbHalf = 0.158;
-  function limb(x, y, scaleY, material) {
-    const pivot = new THREE.Group();
-    pivot.position.set(x, y, 0);
-    const mesh = new THREE.Mesh(geos.limb, material);
-    mesh.scale.set(1.2, scaleY, 1.2);
-    mesh.position.y = -limbHalf * scaleY;
-    pivot.add(mesh);
-    body.add(pivot);
-    return pivot;
+function addAccessory(parent, accessory, front) {
+  if (accessory === 'glasses') {
+    const left = new THREE.Mesh(geos.torus, ink);
+    const right = new THREE.Mesh(geos.torus, ink);
+    left.position.set(-0.12, 0.04, front + 0.02);
+    right.position.set(0.12, 0.04, front + 0.02);
+    parent.add(left, right);
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.015, 0.015), ink);
+    bridge.position.set(0, 0.04, front + 0.02);
+    parent.add(bridge);
+  } else if (accessory === 'antenna') {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 6), ink);
+    pole.position.set(0.12, 0.48, 0);
+    const tip = new THREE.Mesh(sphere, ink);
+    tip.scale.setScalar(0.06);
+    tip.position.set(0.12, 0.6, 0);
+    parent.add(pole, tip);
+  } else if (accessory === 'bow') {
+    const a = new THREE.Mesh(sphere, new THREE.MeshLambertMaterial({ color: 0xff5d8f }));
+    const b = a.clone();
+    a.scale.set(0.1, 0.07, 0.06);
+    b.scale.copy(a.scale);
+    a.position.set(-0.1, 0.4, 0.05);
+    b.position.set(0.1, 0.4, 0.05);
+    const knot = new THREE.Mesh(sphere, new THREE.MeshLambertMaterial({ color: 0xf2c14e }));
+    knot.scale.setScalar(0.05);
+    knot.position.set(0, 0.4, 0.08);
+    parent.add(a, b, knot);
   }
+}
 
-  const armL = limb(-0.27, 0.78, 0.95, bodyMat);
-  const armR = limb(0.27, 0.78, 0.95, bodyMat);
-  const legL = limb(-0.09, 0.46, 1.42, limbMat);
-  const legR = limb(0.09, 0.46, 1.42, limbMat);
+const CHECK = '<svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><path d="M2 6.2l2.6 2.6L10 3.2"/></svg>';
+const PAUSE = '<svg viewBox="0 0 12 12" fill="white"><rect x="2.2" y="2" width="2.4" height="8" rx="0.6"/><rect x="7.4" y="2" width="2.4" height="8" rx="0.6"/></svg>';
 
-  const hand = new THREE.Group();
-  hand.position.set(0, -limbHalf * 0.95 * 2, 0);
-  armR.add(hand);
-  const snack = new THREE.Group();
-  place(geos.box, mat(0xe76f51), snack, 0, 0, 0, 0.08, 0.1, 0.05);
-  hand.add(snack);
-  snack.visible = false;
+function badgeMarkup(status) {
+  if (status === 'busy') return CHECK;
+  if (status === 'waiting') return PAUSE;
+  if (status === 'error') return '!';
+  return '';
+}
 
-  const book = new THREE.Group();
-  place(geos.box, mats.bookCover, book, 0, 0, 0, 0.16, 0.05, 0.12);
-  place(geos.box, mats.page, book, 0, 0.02, 0, 0.13, 0.02, 0.1);
-  book.position.set(0, 0.5, -0.16);
-  book.rotation.x = -0.5;
-  body.add(book);
-  book.visible = false;
-
-  const controller = new THREE.Group();
-  place(geos.box, mats.bezel, controller, 0, 0, 0, 0.18, 0.04, 0.08);
-  place(geos.sphere, mat(0xef5d4c), controller, -0.05, 0.03, 0.01, 0.025, 0.025, 0.025);
-  place(geos.sphere, mat(0x4c8dff), controller, 0.05, 0.03, 0.01, 0.025, 0.025, 0.025);
-  controller.position.set(0, 0.46, -0.18);
-  body.add(controller);
-  controller.visible = false;
-
-  const extra = addAccessory(accessory, head, bodyMat, color);
-
-  const shadow = new THREE.Mesh(geos.circle, mats.shadow);
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.025;
-  shadow.scale.set(0.32, 0.32, 0.32);
-  root.add(shadow);
-
-  return { root, body, head, armL, armR, legL, legR, snack, book, controller, extra };
+function smoothstep(t) {
+  return t * t * (3 - 2 * t);
 }
 
 class Bot {
-  constructor(name, index, slot, scene) {
+  constructor(name, index, slot, scene, floor) {
     this.name = name;
     this.index = index;
     this.hidden = false;
-    const named = NAMED[name];
-    const color = named ? named.color : EXTRA_COLORS[index % EXTRA_COLORS.length];
-    const accessory = named ? named.accessory : 'none';
+    this.status = null;
+    this.note = '';
+    this.activity = null;
+    this.lookKey = '';
+    this.slotRef = null;
+    this.hoverY = 0.9;
+    this.groundY = 0.4;
+    this.phase = Math.random() * Math.PI * 2;
+    this.mode = 'desk';
+    this.glide = null;
+    this.jump = 0;
+    this.pending = 0;
+    this.until = 0;
+    this.pause = 0;
+    this.chatting = false;
+    this.screen = null;
+    this.sitX = slot.x;
+    this.sitZ = slot.z;
+    this.floorY = FLOOR_Y[2];
 
-    const colorMat = mat(color);
-    const deskParts = createDesk(scene, slot, colorMat);
-    this.desk = deskParts.desk;
-    this.screen = deskParts.screen;
-    this.screenMat = makeScreenMaterial(color);
-    this.sitPos = { x: deskParts.sit.x, z: deskParts.sit.z };
-    this.deskYaw = slot.rot;
+    const desk = createDesk(floor, slot);
+    this.desk = desk.desk;
+    this.screen = desk.screen;
+    this.sitX = desk.sitX;
+    this.sitZ = desk.sitZ;
 
-    const parts = makeCharacter(color, accessory);
-    this.root = parts.root;
-    this.body = parts.body;
-    this.head = parts.head;
-    this.armL = parts.armL;
-    this.armR = parts.armR;
-    this.legL = parts.legL;
-    this.legR = parts.legR;
-    this.snack = parts.snack;
-    this.book = parts.book;
-    this.controller = parts.controller;
-    this.extra = parts.extra;
+    this.root = new THREE.Group();
+    this.root.position.set(this.sitX, this.floorY, this.sitZ);
     scene.add(this.root);
+    this.bob = new THREE.Group();
+    this.tilt = new THREE.Group();
+    this.root.add(this.bob);
+    this.bob.add(this.tilt);
+    this.shapeGroup = null;
 
-    this.root.position.set(this.sitPos.x, 0, this.sitPos.z);
-    this.root.rotation.y = this.deskYaw;
+    this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.32, 14), new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false,
+    }));
+    this.shadow.rotation.x = -Math.PI / 2;
+    this.shadow.position.y = 0.04;
+    this.root.add(this.shadow);
+
+    this.book = new THREE.Group();
+    const cover = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.16), bookMat);
+    const pages = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.13), pageMat);
+    pages.position.y = 0.03;
+    this.book.add(cover, pages);
+    this.book.position.set(0, 0.35, 0.28);
+    this.book.visible = false;
+    this.bob.add(this.book);
+    this.snack = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.08), snackMat);
+    this.snack.position.set(0.22, 0.15, 0.2);
+    this.snack.visible = false;
+    this.bob.add(this.snack);
+    this.pad = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.1), padMat);
+    this.pad.position.set(0, 0.2, 0.3);
+    this.pad.visible = false;
+    this.bob.add(this.pad);
 
     this.nameEl = document.createElement('div');
     this.nameEl.className = 'label';
     this.nameEl.textContent = name;
     this.nameLabel = new CSS2DObject(this.nameEl);
-    this.nameLabel.position.set(0, 1.5, 0);
+    this.nameLabel.position.set(0, 0.2, 0);
     this.root.add(this.nameLabel);
 
     this.bubbleEl = document.createElement('div');
     this.bubbleEl.className = 'bubble';
     this.bubble = new CSS2DObject(this.bubbleEl);
-    this.bubble.position.set(0, 1.78, 0);
+    this.bubble.position.set(0, 1.35, 0);
     this.bubble.center.set(0.5, 1);
     this.bubble.visible = false;
     this.root.add(this.bubble);
     this.bubbleText = '';
-    this.bubbleKind = '';
 
-    this.status = null;
-    this.note = '';
-    this.mode = 'sit';
-    this.activity = null;
-    this.activitySit = false;
-    this.activityUntil = 0;
-    this.pendingLeave = false;
-    this.leaveDelay = 0;
-    this.path = [];
-    this.pathIndex = 0;
-    this.finalTarget = this.sitPos;
-    this.desiredYaw = this.deskYaw;
-    this.desiredActYaw = 0;
-    this.sitBlend = 1;
-    this.phase = Math.random() * Math.PI * 2;
-    this.phase0 = this.phase;
-    this.speed = 3.15 + (index % 4) * 0.12;
-    this.slotRef = null;
-    this.pauseLeft = 0;
-    this.chatting = false;
-    this.moving = false;
+    this.badgeEl = document.createElement('div');
+    this.badgeEl.className = 'badge';
+    this.badge = new CSS2DObject(this.badgeEl);
+    this.badge.position.set(0.38, 0.85, 0);
+    this.badge.visible = false;
+    this.root.add(this.badge);
+
+    this.face = 0;
+    this.goalFace = 0;
   }
 
-  setBubble(text, kind) {
+  applyLook(look) {
+    const key = look.shape + look.color + look.tilt + look.accessory;
+    if (key === this.lookKey && this.shapeGroup) return;
+    this.lookKey = key;
+    this.look = look;
+    if (this.shapeGroup) {
+      this.tilt.remove(this.shapeGroup);
+      this.shapeGroup.traverse((obj) => {
+        if (obj.material && obj.material !== eyeMat && obj.material !== outlineMat && obj.material !== ink) {
+          obj.material.dispose();
+        }
+      });
+    }
+    const material = new THREE.MeshLambertMaterial({ color: look.color });
+    const built = makeShape(look.shape, material, luminance(look.color) > 0.62);
+    this.shapeGroup = built.group;
+    this.hoverY = built.hover;
+    this.groundY = built.ground;
+    this.tilt.add(built.group);
+    this.tilt.rotation.z = ((look.tilt || 0) * Math.PI) / 180;
+    addAccessory(built.group, look.accessory, 0.4);
+    const top = built.hover + built.half;
+    this.nameLabel.position.y = top + 0.08;
+    this.bubble.position.y = top + 0.46;
+    this.badge.position.set(built.half * 0.72, built.hover + built.half * 0.35, 0);
+  }
+
+  setBubble(text, emoji) {
     const next = text || '';
-    const nextKind = next ? kind || 'chat' : '';
-    if (next === this.bubbleText && nextKind === this.bubbleKind) return;
+    if (next === this.bubbleText) return;
     this.bubbleText = next;
-    this.bubbleKind = nextKind;
-    this.bubble.visible = next.length > 0 && !this.hidden;
+    this.bubble.visible = next.length > 0 && !this.hidden && this.labelsOn !== false;
     this.bubbleEl.textContent = next;
-    this.bubbleEl.className = nextKind === 'busy' ? 'bubble busy' : nextKind === 'chat' ? 'bubble chat' : 'bubble';
+    this.bubbleEl.className = emoji ? 'bubble emoji' : 'bubble';
+  }
+
+  setBadge(status) {
+    const show = status === 'busy' || status === 'waiting' || status === 'error';
+    this.badge.visible = show && !this.hidden && this.labelsOn !== false;
+    this.badgeEl.className = 'badge ' + (status === 'busy' ? 'busy' : status === 'waiting' ? 'wait' : 'err');
+    this.badgeEl.innerHTML = badgeMarkup(status);
+  }
+
+  setLabels(on) {
+    this.labelsOn = on;
+    this.nameLabel.visible = on && !this.hidden;
+    this.bubble.visible = on && !this.hidden && this.bubbleText.length > 0;
+    this.badge.visible = on && !this.hidden && (this.status === 'busy' || this.status === 'waiting' || this.status === 'error');
   }
 
   show() {
@@ -343,355 +364,295 @@ class Bot {
     this.hidden = false;
     this.root.visible = true;
     this.desk.visible = true;
-    this.nameLabel.visible = true;
     this.status = null;
+    this.setLabels(this.labelsOn !== false);
   }
 
   hide() {
-    if (this.hidden) return;
     this.hidden = true;
     this.root.visible = false;
     this.desk.visible = false;
     this.nameLabel.visible = false;
     this.bubble.visible = false;
-    this.releaseSlot();
+    this.badge.visible = false;
+    this.release();
     this.status = null;
-    this.pendingLeave = false;
-    this.mode = 'sit';
-    this.root.position.set(this.sitPos.x, 0, this.sitPos.z);
   }
 
-  releaseSlot() {
+  release() {
     if (this.slotRef) {
       this.slotRef.taken = null;
       this.slotRef = null;
     }
   }
 
-  setStatus(status, note) {
-    const next = status === 'busy' ? 'busy' : 'idle';
-    const clean = note || '';
-    if (next === this.status) {
-      this.note = clean;
-      if (next === 'busy') this.setBubble(clean || '忙碌中', 'busy');
-      return;
+  screenGlow(night) {
+    const mat = this.screen.material;
+    if (this.status === 'busy') mat.emissiveIntensity = (night ? 1.25 : 0.55) + Math.sin(performance.now() / 400 + this.phase) * 0.15;
+    else if (this.status === 'waiting') mat.emissiveIntensity = 0.32;
+    else if (this.status === 'error') mat.emissiveIntensity = 0.2;
+    else mat.emissiveIntensity = night ? 0.22 : 0.1;
+  }
+
+  setStatus(status, note, look, time, burst) {
+    const next = status === 'busy' || status === 'waiting' || status === 'error' ? status : 'idle';
+    const changed = next !== this.status;
+    this.applyLook(look);
+    this.note = note || '';
+    if (!changed) {
+      if (next !== 'idle') this.setBubble(this.note || (next === 'busy' ? '工作中' : next === 'waiting' ? '等待中' : '出错了'), false);
+      this.setBadge(next);
+      return false;
     }
+    const wasActive = this.status === 'busy' || this.status === 'waiting' || this.status === 'error';
     this.status = next;
-    this.note = clean;
-    this.releaseSlot();
-    this.chatting = false;
-    if (next === 'busy') {
-      this.pendingLeave = false;
-      this.activity = null;
-      this.activitySit = false;
-      this.screen.material = this.screenMat;
-      this.setBubble(clean || '忙碌中', 'busy');
-      const dx = this.sitPos.x - this.root.position.x;
-      const dz = this.sitPos.z - this.root.position.z;
-      if (Math.hypot(dx, dz) < 0.2) {
-        this.mode = 'sit';
-        this.root.position.set(this.sitPos.x, 0, this.sitPos.z);
-        this.desiredYaw = this.deskYaw;
-      } else {
-        this.goTo(this.sitPos);
-      }
+    this.setBadge(next);
+    this.release();
+    if (next !== 'idle') {
+      this.activity = 'desk';
+      this.pending = 0;
+      this.setBubble(this.note || (next === 'busy' ? '工作中' : next === 'waiting' ? '等待中' : '出错了'), false);
+      this.glideTo(this.sitX, this.sitZ, this.hoverY);
     } else {
-      this.screen.material = mats.screenIdle;
-      this.setBubble('', null);
-      this.pendingLeave = true;
-      this.leaveDelay = 0.35 + this.index * 0.42;
-      this.mode = 'sit';
-      this.desiredYaw = this.deskYaw;
+      this.setBubble('', false);
+      if (wasActive) {
+        this.jump = 0.45;
+        burst(this.root.position.x, this.root.position.y + this.hoverY, this.root.position.z);
+      }
+      this.pending = 0.25 + this.index * 0.28;
+      this.mode = 'wait';
     }
+    return changed;
   }
 
-  goTo(goal) {
-    this.finalTarget = goal;
-    this.desiredActYaw = goal.yaw != null ? goal.yaw : this.deskYaw;
-    this.path = buildPath(
-      { x: this.root.position.x, z: this.root.position.z },
-      goal,
-    );
-    this.pathIndex = 0;
-    this.mode = 'move';
-    if (this.path.length === 0) this.arrive();
+  glideTo(x, z, y) {
+    const fromX = this.root.position.x;
+    const fromZ = this.root.position.z;
+    const dx = x - fromX;
+    const dz = z - fromZ;
+    const len = Math.hypot(dx, dz) || 1;
+    this.glide = {
+      x0: fromX,
+      z0: fromZ,
+      x1: x,
+      z1: z,
+      cx: (fromX + x) / 2 + (-dz / len) * Math.min(0.8, len * 0.18),
+      cz: (fromZ + z) / 2 + (dx / len) * Math.min(0.8, len * 0.18),
+      y0: this.bob.position.y,
+      y: y,
+      t: 0,
+      dur: Math.min(3.4, Math.max(0.7, len / 3.4)),
+    };
+    this.mode = 'glide';
+    if (len < 0.08) this.arrive();
   }
 
-  chooseActivity(time, spots) {
-    this.releaseSlot();
+  arrive() {
+    if (!this.glide) return;
+    this.root.position.x = this.glide.x1;
+    this.root.position.z = this.glide.z1;
+    this.glide = null;
+    this.mode = this.status === 'idle' ? 'act' : 'desk';
+    if (this.activity === 'wander') this.pause = 6 + Math.random() * 7;
+  }
+
+  choose(time, spots) {
+    this.release();
     const options = ['wander'];
-    if (spots.snack.some((slot) => !slot.taken)) options.push('snack', 'snack');
-    if (spots.read.some((slot) => !slot.taken)) options.push('read', 'read');
-    if (spots.game.some((slot) => !slot.taken)) options.push('game', 'game');
+    if (spots.snack.some((s) => !s.taken)) options.push('snack', 'snack');
+    if (spots.read.some((s) => !s.taken)) options.push('read', 'read');
+    if (spots.game.some((s) => !s.taken)) options.push('game', 'game');
     let type = options[(Math.random() * options.length) | 0];
-    this.activityUntil = time + ACTIVITY_MIN + Math.random() * ACTIVITY_SPAN;
+    this.until = time + 150 + Math.random() * 90;
     this.chatting = false;
-    this.setBubble('', null);
-
     if (type !== 'wander') {
-      const slot = spots[type].find((item) => !item.taken);
+      const slot = spots[type].find((s) => !s.taken);
       if (!slot) type = 'wander';
       else {
         slot.taken = this;
         this.slotRef = slot;
         this.activity = type;
-        this.activitySit = type !== 'snack';
-        this.goTo(slot);
+        const y = type === 'snack' ? this.groundY : this.groundY + 0.18;
+        this.glideTo(slot.x, slot.z, y);
         return;
       }
     }
     this.activity = 'wander';
-    this.activitySit = false;
-    this.goTo(this.pickWander(spots.wander));
+    const list = spots.wander;
+    let pick = list[(Math.random() * list.length) | 0];
+    this.glideTo(pick.x, pick.z, this.groundY);
   }
 
-  pickWander(spots) {
-    const list = spots;
-    let choice = list[(Math.random() * list.length) | 0];
-    for (let i = 0; i < 4; i++) {
-      const candidate = list[(Math.random() * list.length) | 0];
-      const dx = candidate.x - this.root.position.x;
-      const dz = candidate.z - this.root.position.z;
-      if (dx * dx + dz * dz > 4) {
-        choice = candidate;
-        break;
-      }
-    }
-    return choice;
-  }
-
-  arrive() {
-    this.root.position.x = this.finalTarget.x;
-    this.root.position.z = this.finalTarget.z;
-    this.moving = false;
-    this.pathIndex = this.path.length;
-    if (this.status === 'busy') {
-      this.mode = 'sit';
-      this.desiredYaw = this.deskYaw;
-      this.setBubble(this.note || '忙碌中', 'busy');
-      return;
-    }
-    this.mode = 'act';
-    if (this.activity === 'wander') {
-      this.pauseLeft = 8 + Math.random() * 8;
-      this.desiredYaw = this.root.rotation.y;
-      if (Math.random() < 0.5) this.setBubble('…', 'chat');
-    } else {
-      this.desiredYaw = this.desiredActYaw;
-    }
-  }
-
-  update(dt, time, bots, spots) {
+  update(dt, time, faceYaw, bots, spots, night, interiorOn) {
+    this.root.visible = !this.hidden && interiorOn;
     if (this.hidden) return;
+    if (this.pending > 0) {
+      this.pending -= dt;
+      if (this.pending <= 0) this.choose(time, spots);
+    } else if (this.mode === 'act' && time >= this.until) {
+      this.choose(time, spots);
+    }
 
-    if (this.pendingLeave) {
-      this.leaveDelay -= dt;
-      if (this.leaveDelay <= 0) {
-        this.pendingLeave = false;
-        this.chooseActivity(time, spots);
+    if (this.mode === 'glide' && this.glide) {
+      this.glide.t += dt / this.glide.dur;
+      const t = Math.min(1, this.glide.t);
+      const k = smoothstep(t);
+      const u = 1 - k;
+      this.root.position.x = u * u * this.glide.x0 + 2 * u * k * this.glide.cx + k * k * this.glide.x1;
+      this.root.position.z = u * u * this.glide.z0 + 2 * u * k * this.glide.cz + k * k * this.glide.z1;
+      const dx = this.glide.x1 - this.root.position.x;
+      const dz = this.glide.z1 - this.root.position.z;
+      if (dx * dx + dz * dz > 0.0004) this.goalFace = Math.atan2(dx, dz);
+      if (t >= 1) this.arrive();
+    } else if (this.status !== 'idle') {
+      this.goalFace = faceYaw;
+    } else if (this.activity === 'wander' && this.mode === 'act') {
+      this.pause -= dt;
+      let partner = null;
+      let best = 4.4;
+      for (let i = 0; i < bots.length; i++) {
+        const other = bots[i];
+        if (other === this || other.hidden || other.activity !== 'wander' || other.mode !== 'act') continue;
+        const dx = other.root.position.x - this.root.position.x;
+        const dz = other.root.position.z - this.root.position.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < best) {
+          best = d2;
+          partner = other;
+          this.goalFace = Math.atan2(dx, dz);
+        }
       }
-    } else if (this.mode === 'act' && time >= this.activityUntil) {
-      this.chooseActivity(time, spots);
-    }
-
-    this.moving = false;
-    if (this.mode === 'move') this.stepMove(dt, bots);
-    else if (this.mode === 'act' && this.activity === 'wander') this.updateWander(dt, time, bots, spots);
-
-    this.turn(dt);
-    this.applyPose(dt, time);
-    this.updateProps();
-    if (this.screen.material === this.screenMat) {
-      this.screenMat.emissiveIntensity = 0.85 + Math.sin(time * 3.1 + this.phase0) * 0.25;
-    }
-  }
-
-  stepMove(dt, bots) {
-    if (this.pathIndex >= this.path.length) {
-      this.arrive();
-      return;
-    }
-    const target = this.path[this.pathIndex];
-    let dx = target.x - this.root.position.x;
-    let dz = target.z - this.root.position.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist < 0.1) {
-      this.pathIndex += 1;
-      if (this.pathIndex >= this.path.length) this.arrive();
-      return;
-    }
-    let vx = dx / dist;
-    let vz = dz / dist;
-    for (let i = 0; i < bots.length; i++) {
-      const other = bots[i];
-      if (other === this || other.hidden) continue;
-      const ox = this.root.position.x - other.root.position.x;
-      const oz = this.root.position.z - other.root.position.z;
-      const d2 = ox * ox + oz * oz;
-      if (d2 < 0.5 && d2 > 1e-4) {
-        const d = Math.sqrt(d2);
-        vx += (ox / d) * 0.9;
-        vz += (oz / d) * 0.9;
-      }
-    }
-    const vl = Math.hypot(vx, vz) || 1;
-    vx /= vl;
-    vz /= vl;
-    const step = Math.min(dist, this.speed * dt);
-    this.root.position.x = clamp(this.root.position.x + vx * step, -12.25, 12.25);
-    this.root.position.z = clamp(this.root.position.z + vz * step, -8.25, 8.35);
-    this.desiredYaw = yawToward(vx, vz);
-    this.phase += dt * 9.5;
-    this.moving = true;
-  }
-
-  updateWander(dt, time, bots, spots) {
-    let partner = null;
-    let best = 2.1 * 2.1;
-    let pdx = 0;
-    let pdz = 0;
-    for (let i = 0; i < bots.length; i++) {
-      const other = bots[i];
-      if (other === this || other.hidden) continue;
-      if (other.activity !== 'wander' || other.mode === 'move') continue;
-      const dx = other.root.position.x - this.root.position.x;
-      const dz = other.root.position.z - this.root.position.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < best) {
-        best = d2;
-        partner = other;
-        pdx = dx;
-        pdz = dz;
-      }
-    }
-    if (partner) {
-      this.desiredYaw = yawToward(pdx, pdz);
-      if (!this.chatting) {
+      if (partner && !this.chatting) {
         this.chatting = true;
-        this.setBubble(CHAT[(Math.random() * CHAT.length) | 0], 'chat');
+        this.setBubble(['…', '😄', '👋', '✨'][(Math.random() * 4) | 0], true);
+      } else if (!partner && this.chatting) {
+        this.chatting = false;
+        this.setBubble('', true);
       }
-    } else if (this.chatting) {
-      this.chatting = false;
-      this.setBubble('', null);
+      if (this.pause <= 0 && time < this.until) {
+        this.chatting = false;
+        this.setBubble('', true);
+        const list = spots.wander;
+        const pick = list[(Math.random() * list.length) | 0];
+        this.glideTo(pick.x, pick.z, this.groundY);
+      }
+    } else if (this.status === 'idle') {
+      this.goalFace = faceYaw;
     }
 
-    this.pauseLeft -= dt;
-    if (this.pauseLeft <= 0 && time < this.activityUntil) {
-      this.chatting = false;
-      this.setBubble('', null);
-      this.goTo(this.pickWander(spots.wander));
-    }
-  }
-
-  turn(dt) {
-    let delta = this.desiredYaw - this.root.rotation.y;
+    let delta = this.goalFace - this.face;
     if (delta > Math.PI) delta -= Math.PI * 2;
     else if (delta < -Math.PI) delta += Math.PI * 2;
-    this.root.rotation.y += delta * Math.min(1, dt * 8);
-  }
+    this.face += delta * Math.min(1, dt * 6);
+    this.root.rotation.y = this.face;
 
-  applyPose(dt, time) {
-    const wantSit = this.mode === 'sit' || (this.mode === 'act' && this.activitySit);
-    const blendTarget = wantSit ? 1 : 0;
-    this.sitBlend += (blendTarget - this.sitBlend) * Math.min(1, dt * 6);
-
-    let armLX = 0.15;
-    let armRX = 0.15;
-    let legLX = 0;
-    let legRX = 0;
-    let headX = 0;
-    const typing = this.mode === 'sit' && this.status === 'busy';
-    const eating = this.mode === 'act' && this.activity === 'snack';
-    const reading = this.mode === 'act' && this.activity === 'read';
-    const gaming = this.mode === 'act' && this.activity === 'game';
-
-    if (this.moving) {
-      const swing = Math.sin(this.phase);
-      legLX = swing * 0.75;
-      legRX = -swing * 0.75;
-      armLX = -swing * 0.55;
-      armRX = swing * 0.55;
-    } else if (typing) {
-      armLX = 1.12 + Math.sin(time * 14 + this.phase0) * 0.16;
-      armRX = 1.12 + Math.sin(time * 14 + this.phase0 + 1.3) * 0.16;
-      legLX = 1.25;
-      legRX = 1.25;
-      headX = 0.18 + Math.sin(time * 14) * 0.03;
-    } else if (eating) {
-      const cycle = time % 3.4;
-      let lift = 0;
-      if (cycle > 2.1) lift = Math.sin(((cycle - 2.1) / 1.3) * Math.PI);
-      armRX = -2.15 * lift;
-      armLX = 0.2;
-      headX = 0.25 * lift;
-    } else if (reading) {
-      armLX = 0.95;
-      armRX = 0.95;
-      legLX = 1.25;
-      legRX = 1.25;
-      headX = 0.42;
-    } else if (gaming) {
-      const mash = Math.sin(time * 8 + this.phase0);
-      armLX = 0.85 + mash * 0.1;
-      armRX = 0.85 - mash * 0.1;
-      legLX = 1.15;
-      legRX = 1.15;
-      headX = 0.12;
-    } else if (this.sitBlend > 0.5) {
-      armLX = 0.35;
-      armRX = 0.35;
-      legLX = 1.25;
-      legRX = 1.25;
-    } else if (this.chatting) {
-      armRX = 0.4 + Math.sin(time * 3 + this.phase0) * 0.25;
-      armLX = 0.15;
+    let hop = 0;
+    if (this.jump > 0) {
+      this.jump -= dt;
+      const u = 1 - Math.max(0, this.jump) / 0.45;
+      hop = Math.sin(Math.min(1, u) * Math.PI) * 0.42;
     }
+    const atDesk = this.status !== 'idle' && this.mode === 'desk';
+    let base = this.groundY;
+    if (this.glide) {
+      const k = smoothstep(Math.min(1, this.glide.t));
+      base = this.glide.y0 + (this.glide.y - this.glide.y0) * k;
+    } else if (atDesk) base = this.hoverY;
+    else if (this.activity === 'read' || this.activity === 'game') base = this.groundY + 0.16;
+    const bob = atDesk || this.mode === 'act' ? Math.sin(time * 2.1 + this.phase) * 0.045 : 0;
+    this.bob.position.y = base + bob + hop;
 
-    if (wantSit && !this.moving) {
-      legLX = legLX * (1 - this.sitBlend) + 1.25 * this.sitBlend;
-      legRX = legRX * (1 - this.sitBlend) + 1.25 * this.sitBlend;
+    const emoji = { snack: '🍪', read: '📖', game: '🎮' };
+    if (this.status === 'idle' && this.mode === 'act' && !this.chatting && emoji[this.activity]) {
+      this.setBubble(emoji[this.activity], true);
     }
-
-    this.armL.rotation.x = armLX;
-    this.armR.rotation.x = armRX;
-    this.legL.rotation.x = legLX;
-    this.legR.rotation.x = legRX;
-    this.head.rotation.x = headX;
-    this.head.rotation.y = this.moving ? 0 : Math.sin(time * 0.6 + this.phase0) * 0.12;
-
-    let drop = 0.12 * this.sitBlend;
-    if (gaming) drop += 0.3 * this.sitBlend;
-    if (this.moving) drop = Math.abs(Math.sin(this.phase)) * 0.04;
-    this.body.position.y = -drop;
-
-    if (this.extra.tentacles) {
-      for (let i = 0; i < this.extra.tentacles.length; i++) {
-        this.extra.tentacles[i].rotation.z = Math.sin(time * 1.6 + i) * 0.3;
-        this.extra.tentacles[i].rotation.x = 0.4 + Math.cos(time * 1.3 + i) * 0.15;
-      }
-    }
-    if (this.extra.antenna) {
-      this.extra.antenna.rotation.z = Math.sin(time * 1.4 + this.phase0) * 0.12;
-    }
-  }
-
-  updateProps() {
-    const read = this.mode === 'act' && this.activity === 'read';
-    const game = this.mode === 'act' && this.activity === 'game';
-    const snack = this.mode === 'act' && this.activity === 'snack';
-    if (this.book.visible !== read) this.book.visible = read;
-    if (this.controller.visible !== game) this.controller.visible = game;
-    if (this.snack.visible !== snack) this.snack.visible = snack;
+    this.book.visible = this.activity === 'read' && this.mode === 'act';
+    this.snack.visible = this.activity === 'snack' && this.mode === 'act';
+    this.pad.visible = this.activity === 'game' && this.mode === 'act';
+    this.screenGlow(night);
   }
 }
 
-function clamp(value, min, max) {
-  if (value < min) return min;
-  if (value > max) return max;
-  return value;
+const sparks = [];
+
+function burst(x, y, z) {
+  let spawned = 0;
+  for (let i = 0; i < sparks.length; i++) {
+    const s = sparks[i];
+    if (s.life > 0) continue;
+    const a = (spawned / 7) * Math.PI * 2;
+    s.life = 0.6;
+    s.x = x;
+    s.y = y;
+    s.z = z;
+    s.vx = Math.cos(a) * 1.3;
+    s.vy = 1.2 + (spawned % 3) * 0.25;
+    s.vz = Math.sin(a) * 1.3;
+    s.mesh.visible = true;
+    if (++spawned >= 7) break;
+  }
+}
+
+function hashName(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 33 + name.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export function resolveLook(item) {
+  const base = DEFAULTS[item.name] || {
+    shape: SHAPES[hashName(item.name) % SHAPES.length],
+    color: FALLBACK_COLORS[hashName(item.name) % FALLBACK_COLORS.length],
+    tilt: 0,
+    accessory: 'none',
+  };
+  const shape = SHAPES.indexOf(item.shape) >= 0 ? item.shape : base.shape;
+  const accessory = EXTRAS.indexOf(item.accessory) >= 0 ? item.accessory : base.accessory;
+  const color = typeof item.color === 'string' && /^#?[0-9a-fA-F]{6}$/.test(item.color) ? item.color : base.color;
+  const tilt = Number.isFinite(item.tilt) ? item.tilt : base.tilt || 0;
+  return { shape, color: color.startsWith('#') ? color : '#' + color, tilt, accessory };
+}
+
+export function taskText(bot) {
+  if (!bot || bot.hidden) return '';
+  if (bot.status === 'busy') return bot.note || '工作中';
+  if (bot.status === 'waiting') return bot.note || '等待中';
+  if (bot.status === 'error') return bot.note || '出错了';
+  const map = { snack: '在吃零食', read: '在看书', game: '在玩游戏', wander: '在闲逛', desk: '离开工位' };
+  return map[bot.activity] || '空闲';
+}
+
+export function iconSvg(shape, color) {
+  const c = color || '#999';
+  if (shape === 'sphere' || shape === 'bubble') {
+    return `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="${c}" stroke="#c8c8c8" stroke-width="1"/></svg>`;
+  }
+  if (shape === 'star') {
+    return `<svg viewBox="0 0 32 32"><path fill="${c}" d="M16 2l3.2 8.2L28 12l-6.4 5 2 8.4L16 21.2 8.4 25.4l2-8.4L4 12l8.8-1.8z"/></svg>`;
+  }
+  if (shape === 'drop') {
+    return `<svg viewBox="0 0 32 32"><path fill="${c}" stroke="#c8c8c8" d="M16 3c6 8 9 12 9 17a9 9 0 1 1-18 0c0-5 3-9 9-17z"/></svg>`;
+  }
+  if (shape === 'cloud') {
+    return `<svg viewBox="0 0 32 32"><circle cx="12" cy="18" r="6" fill="${c}"/><circle cx="20" cy="16" r="7" fill="${c}"/><circle cx="16" cy="12" r="5" fill="${c}"/></svg>`;
+  }
+  if (shape === 'diamond') {
+    return `<svg viewBox="0 0 32 32"><path fill="${c}" d="M16 3l11 13-11 13L5 16z"/></svg>`;
+  }
+  if (shape === 'cone' || shape === 'triangle') {
+    return `<svg viewBox="0 0 32 32"><path fill="${c}" d="M16 4l12 22H4z"/></svg>`;
+  }
+  return `<svg viewBox="0 0 32 32"><rect x="6" y="6" width="20" height="20" rx="6" fill="${c}" transform="rotate(${shape === 'rounded_square' ? 8 : 0} 16 16)"/></svg>`;
 }
 
 export function createSim(scene, world) {
+  for (let i = 0; i < 16; i++) {
+    const mesh = new THREE.Mesh(geos.spark, sparkMat);
+    mesh.visible = false;
+    scene.add(mesh);
+    sparks.push({ mesh, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
+  }
+
   const bots = [];
   const byName = new Map();
   let slotIndex = 0;
@@ -699,8 +660,8 @@ export function createSim(scene, world) {
   function ensure(name) {
     let bot = byName.get(name);
     if (bot) return bot;
-    if (slotIndex >= SLOTS.length) return null;
-    bot = new Bot(name, slotIndex, SLOTS[slotIndex], scene);
+    if (slotIndex >= DESK_SLOTS.length) return null;
+    bot = new Bot(name, slotIndex, DESK_SLOTS[slotIndex], scene, world.floor3);
     slotIndex += 1;
     byName.set(name, bot);
     bots.push(bot);
@@ -709,38 +670,49 @@ export function createSim(scene, world) {
 
   return {
     bots,
-    sync(list) {
+    sync(list, time) {
       const seen = new Set();
-      let busy = 0;
-      let idle = 0;
+      const counts = { busy: 0, waiting: 0, error: 0, idle: 0 };
       for (let i = 0; i < list.length; i++) {
         const item = list[i];
         if (!item || typeof item.name !== 'string' || seen.has(item.name)) continue;
         seen.add(item.name);
-        const status = item.status === 'busy' ? 'busy' : 'idle';
-        if (status === 'busy') busy += 1;
-        else idle += 1;
+        const status = item.status === 'busy' || item.status === 'waiting' || item.status === 'error' ? item.status : 'idle';
+        counts[status] += 1;
         const bot = ensure(item.name);
         if (!bot) continue;
         bot.show();
         const note = typeof item.note === 'string' ? item.note.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
-        bot.setStatus(status, note);
+        bot.setStatus(status, note, resolveLook(item), time, burst);
       }
       for (let i = 0; i < bots.length; i++) {
         if (!seen.has(bots[i].name)) bots[i].hide();
       }
-      return { busy, idle };
+      return counts;
     },
-    update(dt, time) {
-      // Sit blend needs the real frame dt. Stash it where applyPose can read it
-      // without allocating.
-      let gaming = false;
+    update(dt, time, faceYaw, showLabels, night, interiorOn) {
       for (let i = 0; i < bots.length; i++) {
         const bot = bots[i];
-        bot.update(dt, time, bots, world.spots);
-        if (!bot.hidden && bot.activity === 'game' && bot.mode === 'act') gaming = true;
+        bot.setLabels(showLabels);
+        bot.update(dt, time, faceYaw, bots, world.spots, night, interiorOn);
       }
-      world.animate(time, gaming);
+      for (let i = 0; i < sparks.length; i++) {
+        const s = sparks[i];
+        if (s.life <= 0) continue;
+        s.life -= dt;
+        s.vy -= dt * 3.2;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.z += s.vz * dt;
+        s.mesh.position.set(s.x, s.y, s.z);
+        const k = Math.max(0, s.life / 0.6);
+        s.mesh.scale.setScalar(0.04 + k * 0.08);
+        s.mesh.visible = s.life > 0;
+      }
+      if (world.tvMat) {
+        const playing = bots.some((b) => !b.hidden && b.activity === 'game' && b.mode === 'act');
+        world.tvMat.emissiveIntensity = playing ? 0.55 + Math.sin(time * 4) * 0.2 : (night ? 0.35 : 0.18);
+      }
     },
   };
 }

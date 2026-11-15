@@ -1,26 +1,25 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { buildWorld } from './world.js';
-import { createSim } from './bots.js';
+import { FLOOR_Y, buildWorld } from './world.js';
+import { createSim, taskText, iconSvg } from './bots.js';
 
 const POLL_MS = 60_000;
 const FRAME_MS = 1000 / 30;
+const ELEV = Math.PI / 4;
 
-const hudTime = document.getElementById('hud-time');
-const hudCount = document.getElementById('hud-count');
 const sceneHost = document.getElementById('scene');
+const clockEl = document.getElementById('clock');
+const updatedEl = document.getElementById('updated');
+const talliesEl = document.getElementById('tallies');
+const rosterEl = document.getElementById('roster');
+const rosterTitle = document.getElementById('roster-title');
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf3ecdf);
-scene.fog = new THREE.Fog(0xf3ecdf, 28, 52);
+scene.background = new THREE.Color(0xe7ebf0);
 
-const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 90);
-camera.position.set(2, 19.5, 19.18);
-
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
-  alpha: false,
   powerPreference: 'low-power',
   stencil: false,
 });
@@ -32,73 +31,208 @@ sceneHost.appendChild(renderer.domElement);
 
 const labels = new CSS2DRenderer();
 labels.setSize(window.innerWidth, window.innerHeight);
+labels.domElement.className = 'labels';
 labels.domElement.style.position = 'absolute';
 labels.domElement.style.inset = '0';
 labels.domElement.style.pointerEvents = 'none';
 sceneHost.appendChild(labels.domElement);
 
-const hemi = new THREE.HemisphereLight(0xfff6e8, 0xd9c2a4, 1.05);
+const hemi = new THREE.HemisphereLight(0xffffff, 0xd5dae3, 0.95);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfffaf2, 0.82);
-sun.position.set(7, 14, 9);
+const sun = new THREE.DirectionalLight(0xfffaf3, 0.72);
+sun.position.set(10, 18, 8);
 scene.add(sun);
 
 const world = buildWorld(scene);
 const sim = createSim(scene, world);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(-1.8, 0.15, -0.7);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.enablePan = false;
-controls.minDistance = 8;
-controls.maxDistance = 36;
-controls.minPolarAngle = 0.38;
-controls.maxPolarAngle = 1.22;
-controls.autoRotate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-controls.autoRotateSpeed = 0.2;
-controls.update();
+const cam = {
+  azimuth: Math.PI / 4,
+  targetAzimuth: Math.PI / 4,
+  zoom: 1,
+  focus: new THREE.Vector3(0.2, FLOOR_Y[0] + 1.2, -0.2),
+  tween: null,
+  floor: 1,
+  exterior: false,
+  night: false,
+  viewHalf: 6.15,
+};
 
-let resumeTimer = 0;
-controls.addEventListener('start', () => {
-  controls.autoRotate = false;
-  resumeTimer = 0;
+function floorFocus(index) {
+  return new THREE.Vector3(0.4, FLOOR_Y[index] + 1.25, -0.15);
+}
+
+function smoothstep(t) {
+  return t * t * (3 - 2 * t);
+}
+
+function tweenTo(goal, zoom, seconds) {
+  cam.tween = {
+    from: cam.focus.clone(),
+    to: goal.clone(),
+    fromZoom: cam.zoom,
+    toZoom: zoom,
+    t: 0,
+    dur: seconds,
+  };
+}
+
+function applyCamera() {
+  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+  const half = cam.viewHalf / cam.zoom;
+  camera.top = half;
+  camera.bottom = -half;
+  camera.left = -half * aspect;
+  camera.right = half * aspect;
+  camera.updateProjectionMatrix();
+  const dir = new THREE.Vector3(
+    Math.cos(ELEV) * Math.sin(cam.azimuth),
+    Math.sin(ELEV),
+    Math.cos(ELEV) * Math.cos(cam.azimuth),
+  );
+  camera.position.copy(cam.focus).addScaledVector(dir, 32);
+  camera.lookAt(cam.focus);
+}
+
+function resize() {
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labels.setSize(window.innerWidth, window.innerHeight);
+  applyCamera();
+}
+window.addEventListener('resize', resize);
+
+function showExterior(on) {
+  cam.exterior = on;
+  document.getElementById('btn-building').classList.toggle('on', on);
+  if (on) {
+    tweenTo(new THREE.Vector3(0, 11.2, 0), 0.46, 1.15);
+  } else {
+    tweenTo(floorFocus(cam.floor - 1), 1, 1.05);
+  }
+}
+
+function selectFloor(id, seconds) {
+  cam.floor = id;
+  cam.exterior = false;
+  document.getElementById('btn-building').classList.remove('on');
+  document.querySelectorAll('.floors button').forEach((btn) => {
+    btn.classList.toggle('on', Number(btn.dataset.floor) === id);
+  });
+  const meta = ['', '大堂', '阅览', '办公'][id];
+  rosterTitle.textContent = id + 'F · ' + (id === 3 ? '本层机器人' : meta);
+  tweenTo(floorFocus(id - 1), 1, seconds || 0.95);
+  renderRoster();
+}
+
+document.querySelectorAll('.floors button').forEach((btn) => {
+  btn.addEventListener('click', () => selectFloor(Number(btn.dataset.floor)));
 });
-controls.addEventListener('end', () => {
-  resumeTimer = performance.now() + 12000;
+document.getElementById('btn-building').addEventListener('click', () => showExterior(!cam.exterior));
+document.getElementById('btn-day').addEventListener('click', () => setNight(false));
+document.getElementById('btn-night').addEventListener('click', () => setNight(true));
+
+function setNight(night) {
+  cam.night = night;
+  document.body.classList.toggle('night', night);
+  document.getElementById('btn-day').classList.toggle('on', !night);
+  document.getElementById('btn-night').classList.toggle('on', night);
+  scene.background.set(night ? 0x12151c : 0xe7ebf0);
+  hemi.intensity = night ? 0.38 : 0.95;
+  hemi.color.set(night ? 0x8aa0c0 : 0xffffff);
+  hemi.groundColor.set(night ? 0x1a1e28 : 0xd5dae3);
+  sun.intensity = night ? 0.28 : 0.72;
+  world.applyTheme(night);
+}
+
+let dragging = false;
+let lastX = 0;
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  dragging = true;
+  lastX = event.clientX;
 });
+window.addEventListener('pointerup', () => { dragging = false; });
+window.addEventListener('pointermove', (event) => {
+  if (!dragging) return;
+  const dx = event.clientX - lastX;
+  lastX = event.clientX;
+  cam.targetAzimuth = THREE.MathUtils.clamp(cam.azimuth + dx * 0.005, Math.PI / 4 - 0.55, Math.PI / 4 + 0.55);
+  cam.azimuth = cam.targetAzimuth;
+});
+renderer.domElement.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  if (cam.exterior) return;
+  const next = THREE.MathUtils.clamp(cam.zoom * (event.deltaY > 0 ? 0.92 : 1.08), 0.72, 1.55);
+  cam.zoom = next;
+  if (cam.tween) cam.tween.toZoom = next;
+}, { passive: false });
 
 renderer.domElement.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
   window.setTimeout(() => window.location.reload(), 1500);
 });
 
-function resize() {
-  const w = window.innerWidth;
-  const h = Math.max(1, window.innerHeight);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-  renderer.setSize(w, h);
-  labels.setSize(w, h);
-}
-window.addEventListener('resize', resize);
-
-function formatMadrid(iso) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '时间未知';
-  const text = new Intl.DateTimeFormat('zh-CN', {
+function formatMadrid(date) {
+  return new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Europe/Madrid',
-    month: 'long',
-    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
   }).format(date);
-  return text;
 }
 
+function tickClock() {
+  clockEl.textContent = formatMadrid(new Date());
+}
+tickClock();
+window.setInterval(tickClock, 1000);
+
 let hasData = false;
+let counts = { busy: 0, waiting: 0, error: 0, idle: 0 };
+
+function paintTallies() {
+  const nodes = talliesEl.querySelectorAll('.dot');
+  nodes[0].textContent = '工作 ' + counts.busy;
+  nodes[1].textContent = '等待 ' + counts.waiting;
+  nodes[2].textContent = '异常 ' + counts.error;
+  nodes[3].textContent = '空闲 ' + counts.idle;
+}
+
+function renderRoster() {
+  rosterEl.replaceChildren();
+  if (cam.floor !== 3 || cam.exterior) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = '这一层没有机器人';
+    rosterEl.appendChild(li);
+    return;
+  }
+  const visible = sim.bots.filter((bot) => !bot.hidden);
+  if (!visible.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = hasData ? '这一层没有机器人' : '正在获取状态…';
+    rosterEl.appendChild(li);
+    return;
+  }
+  for (let i = 0; i < visible.length; i++) {
+    const bot = visible[i];
+    const li = document.createElement('li');
+    const icon = document.createElement('span');
+    icon.className = 'avatar';
+    icon.innerHTML = iconSvg(bot.look ? bot.look.shape : 'rounded_square', bot.look ? bot.look.color : '#8F59F9');
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = bot.name;
+    const task = document.createElement('div');
+    task.className = 'task';
+    task.textContent = taskText(bot);
+    li.append(icon, name, task);
+    rosterEl.appendChild(li);
+  }
+}
+
+let rosterTick = 0;
 
 async function poll() {
   try {
@@ -106,20 +240,28 @@ async function poll() {
     if (!response.ok) throw new Error(String(response.status));
     const data = await response.json();
     if (!data || !Array.isArray(data.bots)) throw new Error('schema');
-    const counts = sim.sync(data.bots);
+    counts = sim.sync(data.bots, performance.now() / 1000);
     hasData = true;
-    hudTime.textContent = '更新于 ' + formatMadrid(data.updated) + '（马德里）';
-    hudCount.textContent = '忙碌 ' + counts.busy + ' · 空闲 ' + counts.idle;
+    const when = new Date(data.updated);
+    updatedEl.textContent = Number.isNaN(when.getTime()) ? '状态时间未知' : '状态 ' + formatMadrid(when);
+    paintTallies();
+    renderRoster();
   } catch {
     if (!hasData) {
-      hudTime.textContent = '暂时无法获取状态，将自动重试';
-      hudCount.textContent = '忙碌 — · 空闲 —';
+      updatedEl.textContent = '暂时无法获取状态，将自动重试';
+      paintTallies();
     }
   }
 }
 
 poll();
 window.setInterval(poll, POLL_MS);
+
+// Open on 1F, then glide up to 3F.
+selectFloor(1, 0.01);
+window.setTimeout(() => {
+  if (cam.floor === 1 && !cam.exterior) selectFloor(3, 2.2);
+}, 450);
 
 let last = performance.now();
 let acc = 0;
@@ -140,15 +282,27 @@ function frame(now) {
   const dt = Math.min(acc / 1000, 0.1);
   acc = 0;
 
-  if (resumeTimer && now > resumeTimer) {
-    controls.autoRotate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    resumeTimer = 0;
+  if (cam.tween) {
+    cam.tween.t += dt / cam.tween.dur;
+    const k = smoothstep(Math.min(1, cam.tween.t));
+    cam.focus.lerpVectors(cam.tween.from, cam.tween.to, k);
+    cam.zoom = cam.tween.fromZoom + (cam.tween.toZoom - cam.tween.fromZoom) * k;
+    if (cam.tween.t >= 1) cam.tween = null;
   }
+  const showShell = cam.exterior && cam.zoom < 0.62;
+  world.interior.visible = !showShell;
+  world.exterior.visible = showShell;
 
-  sim.update(dt, now / 1000);
-  controls.update(dt);
+  sim.update(dt, now / 1000, cam.azimuth, !showShell && cam.floor === 3, cam.night, !showShell);
+  applyCamera();
   renderer.render(scene, camera);
   labels.render(scene, camera);
+
+  rosterTick += dt;
+  if (rosterTick > 0.8) {
+    rosterTick = 0;
+    if (cam.floor === 3 && !cam.exterior) renderRoster();
+  }
 }
 
 requestAnimationFrame(frame);
