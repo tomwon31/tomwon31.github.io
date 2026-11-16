@@ -22,7 +22,15 @@ import yfinance as yf
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "market.json"
 FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}"
-UA = {"User-Agent": "Mozilla/5.0"}
+# FRED returns an empty body unless the request looks like a browser.
+FRED_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/csv,text/plain,*/*",
+}
+UA = {"User-Agent": FRED_HEADERS["User-Agent"]}
 
 
 def log(msg: str) -> None:
@@ -178,21 +186,36 @@ def yahoo_price(meta: dict, symbol: str) -> dict:
     return series_doc(meta, daily, intraday, hourly)
 
 
+def _fred_body_ok(sid: str, body: str) -> bool:
+    if not body or not body.strip():
+        return False
+    head = body[:800]
+    lowered = head.lstrip().lower()
+    return sid in head or "DATE" in head or lowered.startswith("date") or lowered.startswith("observation_date")
+
+
 def fred_text(sid: str) -> str:
-    urls = [
-        f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd=2024-01-01",
-        f"https://fred.stlouisfed.org/data/{sid}.txt",
+    """Browser headers first. FRED sometimes answers only those, and sometimes only a plain client."""
+    csv_url = FRED.format(sid=sid)
+    plain = {"Accept": "text/csv,text/plain,*/*"}
+    attempts = [
+        (csv_url, FRED_HEADERS),
+        (csv_url, plain),
+        (f"{csv_url}&cosd=2024-01-01", FRED_HEADERS),
+        (f"https://fred.stlouisfed.org/data/{sid}.txt", FRED_HEADERS),
+        (f"https://fred.stlouisfed.org/data/{sid}.txt", plain),
     ]
     last = None
-    for url in urls:
+    for url, headers in attempts:
         try:
-            response = requests.get(url, timeout=(8, 20), headers=UA)
+            response = requests.get(url, timeout=(8, 12), headers=headers)
             response.raise_for_status()
-            if sid in response.text[:800] or "DATE" in response.text[:400] or "date" in response.text[:200]:
+            if _fred_body_ok(sid, response.text):
                 return response.text
+            last = RuntimeError(f"FRED {sid} 响应为空或不是序列")
         except Exception as exc:
             last = exc
-            log(f"  FRED {sid} {url.split('?')[0][-24:]} {exc}")
+            log(f"  FRED {sid} {url.split('?')[0][-32:]} {exc}")
     raise last or RuntimeError(f"FRED {sid} 没有响应")
 
 
