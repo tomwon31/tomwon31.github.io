@@ -190,6 +190,7 @@ function loop(now) {
   });
   city.paintSky(look);
   city.update(dt, look.night);
+  room.update(elapsed);
   rig.update(dt, elapsed);
   if (rig.mode !== lastMode) {
     lastMode = rig.mode;

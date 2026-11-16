@@ -231,6 +231,29 @@ export function streakTexture() {
   return finish(c);
 }
 
+export function steamTexture() {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 96;
+  const g = c.getContext('2d');
+  const glow = g.createRadialGradient(32, 58, 2, 32, 52, 28);
+  glow.addColorStop(0, 'rgba(255,252,246,0.45)');
+  glow.addColorStop(0.45, 'rgba(255,248,236,0.14)');
+  glow.addColorStop(1, 'rgba(255,248,236,0)');
+  g.fillStyle = glow;
+  g.beginPath();
+  g.ellipse(32, 58, 16, 26, 0, 0, Math.PI * 2);
+  g.fill();
+  const wisp = g.createRadialGradient(30, 28, 1, 34, 24, 18);
+  wisp.addColorStop(0, 'rgba(255,255,255,0.22)');
+  wisp.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = wisp;
+  g.beginPath();
+  g.ellipse(32, 26, 10, 18, -0.3, 0, Math.PI * 2);
+  g.fill();
+  return finish(c);
+}
+
 export function flakeTexture() {
   const c = document.createElement('canvas');
   c.width = 64;

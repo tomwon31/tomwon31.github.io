@@ -7,6 +7,7 @@ import {
   keyboardTexture,
   photoTexture,
   newsTexture,
+  steamTexture,
 } from './textures.js';
 
 const SCREEN = { w: 0.66, h: 0.4125, x: 0, y: 1.15, z: -0.3, tilt: -0.072 };
@@ -62,12 +63,19 @@ export function buildRoom(scene) {
   const paper = new THREE.MeshStandardMaterial({ map: paperTexture(), roughness: 0.92, metalness: 0 });
   const blotter = new THREE.MeshStandardMaterial({ color: 0x5c382e, roughness: 0.78 });
   const bezel = new THREE.MeshStandardMaterial({ color: 0x161311, roughness: 0.48, metalness: 0.22 });
+  const lampMetal = new THREE.MeshStandardMaterial({
+    color: 0xc98945,
+    roughness: 0.3,
+    metalness: 0.9,
+  });
   const shade = new THREE.MeshStandardMaterial({
-    color: 0x14643a,
-    emissive: 0x1f8a52,
-    emissiveIntensity: 0.45,
-    roughness: 0.42,
-    metalness: 0.02,
+    color: 0x0c4a30,
+    emissive: 0x145c38,
+    emissiveIntensity: 0.28,
+    roughness: 0.2,
+    metalness: 0.06,
+    transparent: true,
+    opacity: 0.9,
     side: THREE.DoubleSide,
   });
   const drapeMat = new THREE.MeshStandardMaterial({ color: 0x6a2430, roughness: 0.96 });
@@ -79,6 +87,7 @@ export function buildRoom(scene) {
   rugMat.polygonOffsetFactor = -2;
   rugMat.polygonOffsetUnits = -2;
 
+  const steam = [];
   const colors = new Map();
   const paint = (hex, rough = 0.7, metalness = 0) => cache(colors, `${hex}|${rough}|${metalness}`, () => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness }));
 
@@ -101,7 +110,27 @@ export function buildRoom(scene) {
   root.updateWorldMatrix(true, true);
   anchors.glowPos.copy(screen.position).addScaledVector(screen.normal, 0.08);
 
-  return { root, screen, shade, anchors };
+  return {
+    root,
+    screen,
+    shade,
+    anchors,
+    update(time) {
+      for (let i = 0; i < steam.length; i += 1) {
+        const wisp = steam[i];
+        const t = (time * wisp.speed + wisp.phase) % 1;
+        const fade = Math.sin(t * Math.PI);
+        wisp.mesh.position.set(
+          Math.sin(time * 0.85 + wisp.phase * 6.2) * 0.014 * t,
+          0.072 + t * 0.16,
+          Math.cos(time * 0.55 + wisp.phase * 4.1) * 0.008 * t,
+        );
+        const s = 0.62 + t * 0.95;
+        wisp.mesh.scale.set(s, s * (1.15 + t * 0.35), 1);
+        wisp.mat.opacity = fade * 0.42;
+      }
+    },
+  };
 
   function buildShell() {
     const { roomX, roomZ0, roomZ1, roomH, window: win } = LAYOUT;
@@ -253,26 +282,58 @@ export function buildRoom(scene) {
 
   function buildLamp() {
     const lamp = new THREE.Group();
-    lamp.position.set(0.76, SURFACE, -0.2);
+    lamp.position.set(0.7, SURFACE, -0.1);
     root.add(lamp);
-    put(lamp, new THREE.CylinderGeometry(0.09, 0.095, 0.028, 16), brass, 0, 0.014, 0, { cast: true });
-    const bulbLocal = new THREE.Vector3(0.1, 0.36, 0.05);
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 1, 8), brass);
-    stem.scale.y = bulbLocal.length();
-    stem.position.copy(bulbLocal).multiplyScalar(0.5);
-    stem.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), bulbLocal.clone().normalize());
-    stem.castShadow = true;
-    lamp.add(stem);
-    const shadeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.12, 0.11, 18, 1, true), shade);
-    shadeMesh.position.copy(bulbLocal);
-    shadeMesh.rotation.x = 0.55;
-    shadeMesh.rotation.z = -0.25;
-    lamp.add(shadeMesh);
-    put(lamp, new THREE.SphereGeometry(0.02, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffe1b0 }), bulbLocal.x, bulbLocal.y, bulbLocal.z);
-    const lampPos = bulbLocal.clone();
+
+    put(lamp, new THREE.CylinderGeometry(0.074, 0.08, 0.012, 40), lampMetal, 0, 0.006, 0, { cast: true });
+    put(lamp, new THREE.CylinderGeometry(0.046, 0.052, 0.014, 32), lampMetal, 0, 0.018, 0, { cast: true });
+    put(lamp, new THREE.CylinderGeometry(0.009, 0.011, 0.15, 20), lampMetal, 0, 0.098, 0, { cast: true });
+    put(lamp, new THREE.SphereGeometry(0.016, 20, 14), lampMetal, 0, 0.176, 0, { cast: true });
+
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, 0.15, 16), lampMetal);
+    arm.rotation.z = Math.PI / 2;
+    arm.position.set(-0.07, 0.188, 0.012);
+    arm.castShadow = true;
+    lamp.add(arm);
+
+    const cowl = new THREE.Group();
+    cowl.position.set(-0.145, 0.2, 0.02);
+    lamp.add(cowl);
+
+    const glass = new THREE.Mesh(
+      new THREE.SphereGeometry(0.058, 40, 24, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      shade,
+    );
+    glass.scale.set(1.82, 0.72, 1.08);
+    cowl.add(glass);
+
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.062, 0.0042, 10, 48), lampMetal);
+    rim.rotation.x = Math.PI / 2;
+    rim.scale.set(1.7, 1, 1);
+    rim.position.y = 0.004;
+    cowl.add(rim);
+
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.034, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.46), lampMetal);
+    cap.scale.set(2.15, 0.5, 1.2);
+    cap.position.y = 0.046;
+    cowl.add(cap);
+
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.012, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0xfff0d2 }),
+    );
+    bulb.position.y = 0.02;
+    cowl.add(bulb);
+
+    for (let i = 0; i < 5; i += 1) {
+      put(cowl, new THREE.SphereGeometry(0.0036, 8, 6), lampMetal, 0.078, -0.012 - i * 0.011, 0.02);
+    }
+    put(cowl, new THREE.SphereGeometry(0.007, 12, 10), lampMetal, 0.078, -0.07, 0.02);
+
+    const lightLocal = new THREE.Vector3(-0.145, 0.17, 0.02);
     lamp.updateWorldMatrix(true, true);
-    lamp.localToWorld(lampPos);
-    anchors.lampPos.copy(lampPos);
+    anchors.lampPos.copy(lamp.localToWorld(lightLocal));
+    anchors.lampTarget.set(0.28, SURFACE - 0.01, 0.06);
   }
 
   function buildTypewriter() {
@@ -312,19 +373,44 @@ export function buildRoom(scene) {
 
   function buildCup() {
     const cup = new THREE.Group();
-    cup.position.set(0.34, SURFACE, 0.22);
+    cup.position.set(0.46, SURFACE + 0.03, 0.1);
+    cup.scale.setScalar(1.18);
     root.add(cup);
-    put(cup, new THREE.CylinderGeometry(0.034, 0.03, 0.07, 12), paint(0xf3efe6, 0.4), 0, 0.04, 0, { cast: true });
-    put(cup, new THREE.CylinderGeometry(0.028, 0.028, 0.012, 12), paint(0x2a1a12, 0.35), 0, 0.062, 0);
-    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.005, 6, 12), paint(0xf3efe6, 0.4));
-    handle.position.set(0.034, 0.04, 0);
+    const porcelain = new THREE.MeshStandardMaterial({ color: 0xf3eee6, roughness: 0.36, metalness: 0.05 });
+    const coffee = new THREE.MeshStandardMaterial({ color: 0x2a160e, roughness: 0.28, metalness: 0.12 });
+    put(cup, new THREE.CylinderGeometry(0.05, 0.046, 0.008, 32), porcelain, 0, 0.004, 0, { cast: true, receive: true });
+    put(cup, new THREE.CylinderGeometry(0.03, 0.024, 0.046, 28), porcelain, 0, 0.032, 0, { cast: true });
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.029, 0.0024, 8, 28), lampMetal);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.054;
+    cup.add(rim);
+    put(cup, new THREE.CylinderGeometry(0.026, 0.026, 0.004, 24), coffee, 0, 0.048, 0);
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.014, 0.0036, 8, 18), porcelain);
+    handle.position.set(0.03, 0.032, 0);
     handle.rotation.y = Math.PI / 2;
+    handle.castShadow = true;
     cup.add(handle);
-    put(root, new THREE.CylinderGeometry(0.028, 0.032, 0.07, 10), paint(0x6a3a28, 0.6), -0.16, SURFACE + 0.04, 0.16, { cast: true });
-    for (const [dx, color] of [[-0.008, 0x1d3557], [0.006, 0x9c2c24], [0.014, 0xc4a574]]) {
-      const pen = put(root, new THREE.CylinderGeometry(0.003, 0.003, 0.12, 6), paint(color, 0.5), -0.16 + dx, SURFACE + 0.1, 0.16);
-      pen.rotation.z = 0.08;
-      pen.rotation.x = 0.05;
+
+    const steamMap = steamTexture();
+    for (let i = 0; i < 6; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: steamMap,
+        transparent: true,
+        depthWrite: false,
+        fog: false,
+        toneMapped: false,
+        opacity: 0,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.055), mat);
+      mesh.position.y = 0.08;
+      mesh.renderOrder = 2;
+      cup.add(mesh);
+      steam.push({
+        mesh,
+        mat,
+        phase: i / 6,
+        speed: 0.16 + (i % 3) * 0.035,
+      });
     }
   }
 
