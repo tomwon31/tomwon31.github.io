@@ -1,0 +1,6 @@
+yfinance>=0.2.54
+pandas>=2.2
+requests>=2.32
+akshare>=1.16
+lxml>=5
+xlrd>=2.0.1

@@ -216,10 +216,26 @@
   border-bottom-color: var(--gold);
 }
 
+.ranges button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.group-title {
+  margin: 16px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.group-title:first-child { margin-top: 0; }
+
 .cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  margin-bottom: 4px;
 }
 
 .card, .sheet {
@@ -287,7 +303,17 @@
   color: var(--muted);
   font-size: 11px;
   letter-spacing: 0.04em;
+  line-height: 1.45;
   min-height: 1.2em;
+}
+
+.nodata {
+  height: 72px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
 }
 
 .card.picked { border-color: #c4a46a; }

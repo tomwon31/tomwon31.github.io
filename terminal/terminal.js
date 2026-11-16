@@ -1,101 +1,77 @@
 /**
- * 行情桌占位。以后把 CATALOG 换成真数据即可：
- * 每个分类一组 cards，卡片含 name / value / change / dir / seed。
+ * 行情桌。股票指数和宏观数据读 data/market.json；
+ * 利率、通胀、就业、汇率、大宗商品仍是示例。
  */
 
 const RANGES = ['日内', '一周', '一月', '一年'];
 const RANGE_SALT = { 日内: 1, 一周: 9, 一月: 21, 一年: 47 };
+const TICKER = ['GSPC', 'IXIC', 'DJI', 'HSI', 'HSTECH', 'SSE', 'STAR50', 'CHINEXT'];
+
+const SAMPLE = {
+  rates: [
+    { name: '联邦基金利率', value: '4.50%', change: '0.00', dir: 'flat', seed: 2 },
+    { name: '美债10年', value: '4.28%', change: '+0.03', dir: 'up', seed: 11 },
+    { name: '美债2年', value: '4.02%', change: '−0.01', dir: 'down', seed: 7 },
+    { name: '10Y-2Y利差', value: '0.26%', change: '+0.04', dir: 'up', seed: 15 },
+  ],
+  cpi: [
+    { name: 'CPI同比', value: '2.6%', change: '−0.1', dir: 'down', seed: 4 },
+    { name: '核心CPI', value: '3.1%', change: '0.0', dir: 'flat', seed: 6 },
+    { name: 'PCE', value: '2.4%', change: '−0.1', dir: 'down', seed: 10 },
+    { name: '5年盈亏平衡', value: '2.35%', change: '+0.02', dir: 'up', seed: 14 },
+  ],
+  jobs: [
+    { name: '非农就业', value: '+14.2万', change: '−3.1万', dir: 'down', seed: 9 },
+    { name: '失业率', value: '4.1%', change: '+0.1', dir: 'up', seed: 12 },
+    { name: '初请失业金', value: '22.3万', change: '+0.6万', dir: 'up', seed: 16 },
+    { name: '时薪同比', value: '3.9%', change: '−0.1', dir: 'down', seed: 18 },
+  ],
+  fx: [
+    { name: '美元指数', value: '104.82', change: '+0.21%', dir: 'up', seed: 19 },
+    { name: '美元/人民币', value: '7.24', change: '+0.08%', dir: 'up', seed: 22 },
+    { name: '欧元/美元', value: '1.08', change: '−0.12%', dir: 'down', seed: 24 },
+    { name: '美元/日元', value: '152.40', change: '+0.33%', dir: 'up', seed: 27 },
+  ],
+  cmd: [
+    { name: 'WTI原油', value: '78.40', change: '−1.12%', dir: 'down', seed: 28 },
+    { name: '布伦特', value: '82.15', change: '−0.84%', dir: 'down', seed: 31 },
+    { name: '伦敦金', value: '2,684', change: '+0.56%', dir: 'up', seed: 33 },
+    { name: 'LME铜', value: '9,420', change: '+0.27%', dir: 'up', seed: 36 },
+  ],
+};
 
 const CATALOG = [
   {
-    id: 'us',
-    name: '美股指数',
-    blurb: '示意看板。数字与曲线都是示例，尚未接入行情。',
-    cards: [
-      { name: '标普500', value: '5,842.31', change: '+0.46%', dir: 'up', seed: 3 },
-      { name: '纳斯达克', value: '18,972.64', change: '−0.22%', dir: 'down', seed: 8 },
-      { name: '道琼斯', value: '43,150.80', change: '+0.18%', dir: 'up', seed: 5 },
-      { name: '罗素2000', value: '2,284.11', change: '+0.63%', dir: 'up', seed: 13 },
+    id: 'eq',
+    name: '股票指数',
+    blurb: '美股、港股与A股。日频品种没有日内曲线。',
+    live: true,
+    groups: [
+      { name: '美股', ids: ['IXIC', 'DJI', 'GSPC', 'RUT'] },
+      { name: '港股', ids: ['HSI', 'HSTECH'] },
+      { name: 'A股', ids: ['SSE', 'STAR50', 'CHINEXT'] },
     ],
   },
   {
-    id: 'rates',
-    name: '利率与美债',
-    blurb: '收益率与利差为示例刻度，不是报价。',
-    cards: [
-      { name: '联邦基金利率', value: '4.50%', change: '0.00', dir: 'flat', seed: 2 },
-      { name: '美债10年', value: '4.28%', change: '+0.03', dir: 'up', seed: 11 },
-      { name: '美债2年', value: '4.02%', change: '−0.01', dir: 'down', seed: 7 },
-      { name: '10Y-2Y利差', value: '0.26%', change: '+0.04', dir: 'up', seed: 15 },
+    id: 'macro',
+    name: '宏观数据',
+    blurb: '信用、股债性价比、波动和资金。卡片写明口径。',
+    live: true,
+    groups: [
+      { name: '信用风险', ids: ['HY_OAS', 'IG_OAS', 'BBB_OAS'] },
+      { name: '估值与股债性价比', ids: ['US_ERP', 'CN_ERP'] },
+      { name: '情绪与波动', ids: ['VIX', 'VXN', 'MOVE', 'CSI300_RV'] },
+      { name: '资金与拥挤度', ids: ['CROWDING', 'HUIJIN_ETF'] },
     ],
   },
-  {
-    id: 'cpi',
-    name: '通胀',
-    blurb: '物价指标的示意走势。',
-    cards: [
-      { name: 'CPI同比', value: '2.6%', change: '−0.1', dir: 'down', seed: 4 },
-      { name: '核心CPI', value: '3.1%', change: '0.0', dir: 'flat', seed: 6 },
-      { name: 'PCE', value: '2.4%', change: '−0.1', dir: 'down', seed: 10 },
-      { name: '5年盈亏平衡', value: '2.35%', change: '+0.02', dir: 'up', seed: 14 },
-    ],
-  },
-  {
-    id: 'jobs',
-    name: '就业',
-    blurb: '劳工市场示例，不是劳工部公布值。',
-    cards: [
-      { name: '非农就业', value: '+14.2万', change: '−3.1万', dir: 'down', seed: 9 },
-      { name: '失业率', value: '4.1%', change: '+0.1', dir: 'up', seed: 12 },
-      { name: '初请失业金', value: '22.3万', change: '+0.6万', dir: 'up', seed: 16 },
-      { name: '时薪同比', value: '3.9%', change: '−0.1', dir: 'down', seed: 18 },
-    ],
-  },
-  {
-    id: 'fx',
-    name: '汇率',
-    blurb: '汇率刻度为示例，不含点差。',
-    cards: [
-      { name: '美元指数', value: '104.82', change: '+0.21%', dir: 'up', seed: 19 },
-      { name: '美元/人民币', value: '7.24', change: '+0.08%', dir: 'up', seed: 22 },
-      { name: '欧元/美元', value: '1.08', change: '−0.12%', dir: 'down', seed: 24 },
-      { name: '美元/日元', value: '152.40', change: '+0.33%', dir: 'up', seed: 27 },
-    ],
-  },
-  {
-    id: 'cmd',
-    name: '大宗商品',
-    blurb: '能源与金属的示意价格。',
-    cards: [
-      { name: 'WTI原油', value: '78.40', change: '−1.12%', dir: 'down', seed: 28 },
-      { name: '布伦特', value: '82.15', change: '−0.84%', dir: 'down', seed: 31 },
-      { name: '伦敦金', value: '2,684', change: '+0.56%', dir: 'up', seed: 33 },
-      { name: 'LME铜', value: '9,420', change: '+0.27%', dir: 'up', seed: 36 },
-    ],
-  },
-  {
-    id: 'crypto',
-    name: '加密货币',
-    blurb: '币价为示例，不构成任何买卖提示。',
-    cards: [
-      { name: '比特币', value: '67,420', change: '+1.84%', dir: 'up', seed: 40 },
-      { name: '以太坊', value: '3,286', change: '+1.12%', dir: 'up', seed: 42 },
-      { name: '总市值', value: '2.41万亿', change: '+1.40%', dir: 'up', seed: 44 },
-      { name: '稳定币占比', value: '7.8%', change: '−0.05', dir: 'down', seed: 46 },
-    ],
-  },
+  { id: 'rates', name: '利率与美债', blurb: '收益率与利差为示例刻度，不是报价。', cards: SAMPLE.rates },
+  { id: 'cpi', name: '通胀', blurb: '物价指标的示意走势。', cards: SAMPLE.cpi },
+  { id: 'jobs', name: '就业', blurb: '劳工市场示例，不是劳工部公布值。', cards: SAMPLE.jobs },
+  { id: 'fx', name: '汇率', blurb: '汇率刻度为示例，不含点差。', cards: SAMPLE.fx },
+  { id: 'cmd', name: '大宗商品', blurb: '能源与金属的示意价格。', cards: SAMPLE.cmd },
 ];
 
-const SHEET = [
-  ['标普500', '5,842.31', '+0.46%', '日内'],
-  ['纳斯达克', '18,972.64', '−0.22%', '日内'],
-  ['美债10年', '4.28%', '+0.03', '一周'],
-  ['美元指数', '104.82', '+0.21%', '一周'],
-  ['WTI原油', '78.40', '−1.12%', '一月'],
-  ['伦敦金', '2,684', '+0.56%', '一月'],
-  ['比特币', '67,420', '+1.84%', '一年'],
-  ['失业率', '4.1%', '+0.1', '一年'],
-];
+let market = { series: {} };
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -107,11 +83,11 @@ function mulberry32(seed) {
   };
 }
 
-function series(seed, n = 36) {
+function fakeSeries(seed) {
   const rand = mulberry32(seed);
   let v = (rand() - 0.4) * 2;
   const pts = [];
-  for (let i = 0; i < n; i += 1) {
+  for (let i = 0; i < 36; i += 1) {
     v += (rand() - 0.48) * 1.15;
     v *= 0.9;
     pts.push(v);
@@ -119,22 +95,91 @@ function series(seed, n = 36) {
   return pts;
 }
 
-function chartSvg(seed, dir) {
-  const pts = series(seed);
-  const min = Math.min(...pts);
-  const max = Math.max(...pts);
+function chartFromValues(values, dir) {
+  if (!values || values.length < 2) {
+    return '<p class="nodata">该区间点数不足</p>';
+  }
+  const nums = values.map((row) => row[1]);
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
   const w = 320;
   const h = 86;
   const pad = 4;
   const span = max - min || 1;
-  const xy = pts.map((v, i) => {
-    const x = pad + (i / (pts.length - 1)) * (w - pad * 2);
+  const xy = nums.map((v, i) => {
+    const x = pad + (i / (nums.length - 1)) * (w - pad * 2);
     const y = pad + (1 - (v - min) / span) * (h - pad * 2);
     return [x, y];
   });
   const d = xy.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
   const fill = `${d} L${xy[xy.length - 1][0].toFixed(1)} ${h} L${xy[0][0].toFixed(1)} ${h} Z`;
   return `<svg class="chart ${dir}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path class="fill" d="${fill}"></path><path class="line" d="${d}"></path></svg>`;
+}
+
+function chartFromSeed(seed, dir) {
+  return chartFromValues(fakeSeries(seed).map((v) => ['', v]), dir);
+}
+
+function signOf(value) {
+  if (value > 0.0000001) return 'up';
+  if (value < -0.0000001) return 'down';
+  return 'flat';
+}
+
+function formatNumber(value, digits) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  return Number(value).toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatChange(item) {
+  const value = item?.change;
+  if (value == null || Number.isNaN(Number(value))) return { text: '—', dir: 'flat' };
+  const abs = Math.abs(Number(value));
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  const body = item.changeKind === 'pct' ? `${abs.toFixed(2)}%` : abs.toFixed(item.digits ?? 2);
+  return { text: `${sign}${body}`, dir: signOf(value) };
+}
+
+function liveCard(id) {
+  const item = market.series?.[id];
+  if (!item) {
+    return {
+      id,
+      name: id,
+      value: '—',
+      change: '—',
+      dir: 'flat',
+      sample: true,
+      tag: '示例数据',
+      footer: '数据文件里还没有这一项',
+      points: [],
+    };
+  }
+  const change = formatChange(item);
+  const suffix = item.value == null ? '' : (item.suffix || '');
+  return {
+    id,
+    name: item.name || id,
+    value: item.value == null ? '—' : `${formatNumber(item.value, item.digits ?? 2)}${suffix}`,
+    change: change.text,
+    dir: change.dir,
+    sample: Boolean(item.sample),
+    tag: item.sample ? '示例数据' : (item.stale ? '沿用上次' : (item.symbol || '行情')),
+    footer: [item.source, item.updated ? `更新 ${item.updated}` : '', item.note].filter(Boolean).join(' · '),
+    points: item.ranges || {},
+  };
+}
+
+function categoryIds(cat) {
+  if (!cat.groups) return [];
+  return cat.groups.flatMap((group) => group.ids);
+}
+
+function hasIntraday(cat) {
+  return categoryIds(cat).some((id) => (market.series?.[id]?.ranges?.['日内'] || []).length >= 2);
 }
 
 function nyClock(date = new Date()) {
@@ -155,14 +200,33 @@ function nyClock(date = new Date()) {
 }
 
 function cardHtml(card, range, picked) {
-  const seed = card.seed * 17 + (RANGE_SALT[range] || 1);
-  const note = picked ? '示例序列 · 未接入数据源' : '日线示意';
-  return `<article class="card${picked ? ' picked' : ''}" data-card="${card.name}">
-    <header><h3>${card.name}</h3><span class="tag">示例数据</span></header>
+  let chart = '';
+  let foot = card.footer;
+  if (card.sample && card.seed != null) {
+    chart = chartFromSeed(card.seed * 17 + (RANGE_SALT[range] || 1), card.dir);
+    foot = picked ? '示例序列 · 未接入数据源' : '日线示意';
+  } else if (card.sample) {
+    chart = '<p class="nodata">暂无序列</p>';
+  } else if (range === '日内' && (!card.points['日内'] || card.points['日内'].length < 2)) {
+    chart = '<p class="nodata">仅日频</p>';
+  } else {
+    chart = chartFromValues(card.points[range], card.dir);
+  }
+  return `<article class="card${picked ? ' picked' : ''}" data-card="${card.id || card.name}">
+    <header><h3>${card.name}</h3><span class="tag">${card.tag || '示例数据'}</span></header>
     <div class="stat"><b>${card.value}</b><em class="${card.dir}">${card.change}</em></div>
-    ${chartSvg(seed, card.dir)}
-    <footer>${note}</footer>
+    ${chart}
+    <footer>${foot || ''}</footer>
   </article>`;
+}
+
+function tickerHtml() {
+  const parts = TICKER.map((id) => {
+    const card = liveCard(id);
+    if (card.value === '—') return '';
+    return `${card.name} ${card.value} <em class="${card.dir}">${card.change}</em>`;
+  }).filter(Boolean);
+  return parts.length ? parts.join('　·　') : '指数行情尚未写入';
 }
 
 export function createTerminal({ onBack }) {
@@ -176,10 +240,10 @@ export function createTerminal({ onBack }) {
   el.innerHTML = `
     <header class="term-top">
       <button type="button" data-back class="term-back">← 返回办公室</button>
-      <div class="mast"><strong>行情桌</strong><span>华尔街 · 示意终端</span></div>
+      <div class="mast"><strong>行情桌</strong><span>华尔街</span></div>
       <div class="ny"><small data-date>纽约</small><b data-time>--:--:--</b></div>
     </header>
-    <div class="tape">标普500 5,842.31 <em>+0.46%</em>　·　纳指 18,972.64 <em class="down">−0.22%</em>　·　十年期 4.28% <em>+0.03</em>　·　美元指数 104.82 <em>+0.21%</em>　·　伦敦金 2,684 <em>+0.56%</em>　·　比特币 67,420 <em>+1.84%</em>　·　示例数据</div>
+    <div class="tape" data-tape>正在读取指数…</div>
     <div class="term-body">
       <nav class="side" aria-label="分类"></nav>
       <div class="main"></div>
@@ -187,6 +251,7 @@ export function createTerminal({ onBack }) {
 
   const side = el.querySelector('.side');
   const main = el.querySelector('.main');
+  const tape = el.querySelector('[data-tape]');
   const timeEl = el.querySelector('[data-time]');
   const dateEl = el.querySelector('[data-date]');
 
@@ -199,28 +264,47 @@ export function createTerminal({ onBack }) {
 
   function paintMain(resetScroll) {
     const cat = CATALOG.find((item) => item.id === state.cat) || CATALOG[0];
+    const intradayOk = !cat.live || hasIntraday(cat);
+    if (state.range === '日内' && !intradayOk) state.range = '一月';
     const top = resetScroll ? 0 : main.scrollTop;
-    const ranges = RANGES.map((name) => `<button type="button" data-range="${name}" class="${name === state.range ? 'on' : ''}">${name}</button>`).join('');
-    const cards = cat.cards.map((card) => cardHtml(card, state.range, state.pick === card.name)).join('');
-    const rows = SHEET.map(([name, value, change, span]) => {
-      const dir = change.startsWith('−') || change.startsWith('-') ? 'down' : change.startsWith('+') ? 'up' : '';
-      return `<tr><td>${name}</td><td>${value}</td><td class="${dir}">${change}</td><td>${span}</td></tr>`;
+    const ranges = RANGES.map((name) => {
+      const disabled = name === '日内' && !intradayOk ? ' disabled' : '';
+      const on = name === state.range ? ' on' : '';
+      return `<button type="button" data-range="${name}" class="${on.trim()}"${disabled}>${name}</button>`;
     }).join('');
+    let body = '';
+    if (cat.live) {
+      body = cat.groups.map((group) => {
+        const cards = group.ids.map((id) => cardHtml(liveCard(id), state.range, state.pick === id)).join('');
+        return `<h2 class="group-title">${group.name}</h2><div class="cards">${cards}</div>`;
+      }).join('');
+    } else {
+      const cards = cat.cards.map((card) => cardHtml({
+        ...card,
+        id: card.name,
+        sample: true,
+        tag: '示例数据',
+      }, state.range, state.pick === card.name)).join('');
+      body = `<div class="cards">${cards}</div>`;
+    }
+    const sheetRows = (cat.live ? categoryIds(cat).map((id) => liveCard(id)) : cat.cards).map((card) => (
+      `<tr><td>${card.name}</td><td>${card.value}</td><td class="${card.dir}">${card.change}</td><td>${cat.live ? (card.sample ? '示例' : '行情') : '示例'}</td></tr>`
+    )).join('');
     main.innerHTML = `
       <div class="lede">
         <div><h1>${cat.name}</h1><p>${cat.blurb}</p></div>
         <div class="ranges" role="tablist" aria-label="区间">${ranges}</div>
       </div>
-      <div class="cards">${cards}</div>
+      ${body}
       <section class="sheet">
-        <header><h3>最近打印</h3><span class="tag">示例数据</span></header>
+        <header><h3>一览</h3>${cat.live ? '' : '<span class="tag">示例数据</span>'}</header>
         <table>
-          <thead><tr><th>名称</th><th>最新</th><th>变动</th><th>区间</th></tr></thead>
-          <tbody>${rows}</tbody>
+          <thead><tr><th>名称</th><th>最新</th><th>变动</th><th>性质</th></tr></thead>
+          <tbody>${sheetRows}</tbody>
         </table>
-        <footer>打印条只为占位，滚动这个区域即可。</footer>
       </section>`;
     main.scrollTop = top;
+    tape.innerHTML = tickerHtml();
   }
 
   function tick() {
@@ -234,22 +318,32 @@ export function createTerminal({ onBack }) {
   tick();
   const timer = setInterval(tick, 1000);
 
+  fetch(new URL('../data/market.json', import.meta.url))
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+    .then((data) => {
+      market = data || { series: {} };
+      paintMain(false);
+    })
+    .catch(() => {
+      tape.textContent = '指数文件没有读到，股票与宏观会显示为空';
+    });
+
   el.addEventListener('click', (event) => {
     const back = event.target.closest('[data-back]');
     if (back) {
       onBack?.();
       return;
     }
-    const cat = event.target.closest('[data-cat]');
-    if (cat) {
-      state.cat = cat.dataset.cat;
+    const catBtn = event.target.closest('[data-cat]');
+    if (catBtn) {
+      state.cat = catBtn.dataset.cat;
       state.pick = '';
       paintSide();
       paintMain(true);
       return;
     }
     const range = event.target.closest('[data-range]');
-    if (range) {
+    if (range && !range.disabled) {
       state.range = range.dataset.range;
       paintMain(false);
       return;
