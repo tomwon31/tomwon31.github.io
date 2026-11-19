@@ -26,10 +26,10 @@ function look(partial) {
 const PRESET = {
   clear: {
     day: look({
-      skyTop: '#6e92b0', skyUpper: '#d5e6f1', skyHorizon: '#f2c48a', skyBelow: '#c9a27c', silhouette: '#b08968',
-      fog: '#e8c49a', fogD: 0.0054, sun: '#ffd2a4', sunI: 3.6,
-      hemiS: '#ffe4c4', hemiG: '#7a5340', hemiI: 0.72,
-      bounce: '#ffd8b4', bounceI: 0.48, exposure: 1.12,
+      skyTop: '#3f8ec8', skyUpper: '#b7daf2', skyHorizon: '#d7e7f2', skyBelow: '#c3cfcb', silhouette: '#7e97a8',
+      fog: '#c5d9e8', fogD: 0.0022, sun: '#ffe7b8', sunI: 5.4,
+      hemiS: '#e8f3fb', hemiG: '#c6b196', hemiI: 0.58,
+      bounce: '#ffe6c4', bounceI: 0.36, exposure: 1.28,
       rain: 0, snow: 0, disc: 1, moon: 0, spot: 70, shade: 0.26, screen: 3.5,
     }),
     night: look({
@@ -75,7 +75,7 @@ const PRESET = {
   snow: {
     day: look({
       skyTop: '#c5d0d8', skyUpper: '#e7eef3', skyHorizon: '#eef2f4', skyBelow: '#d5dde3', silhouette: '#c5d0d8',
-      fog: '#e4eaee', fogD: 0.012, sun: '#f4f7fb', sunI: 1.45,
+      fog: '#e4eaee', fogD: 0.0068, sun: '#f4f7fb', sunI: 1.45,
       hemiS: '#f7fbff', hemiG: '#8b939c', hemiI: 0.8,
       bounce: '#f5f8fb', bounceI: 0.4, exposure: 1.08,
       rain: 0, snow: 1, disc: 0.35, moon: 0, spot: 64, shade: 0.24, screen: 4,
@@ -200,18 +200,19 @@ export function createAtmosphere(scene, renderer, room) {
 
   const hemi = new THREE.HemisphereLight(0xffe4c4, 0x7a5340, 0.7);
   const sun = new THREE.DirectionalLight(0xffd2a4, 3.4);
-  sun.position.set(-2.8, 6.4, -6.5);
-  sun.target.position.set(0.1, 0.7, 0.05);
+  sun.position.set(-2.2, 2.7, -11.2);
+  sun.target.position.set(0.0, 0.74, 0.25);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.camera.near = 0.4;
-  sun.shadow.camera.far = 22;
-  sun.shadow.camera.left = -5;
-  sun.shadow.camera.right = 5;
-  sun.shadow.camera.top = 5;
-  sun.shadow.camera.bottom = -5;
-  sun.shadow.bias = -0.00035;
-  sun.shadow.normalBias = 0.028;
+  sun.shadow.camera.near = 0.8;
+  sun.shadow.camera.far = 24;
+  sun.shadow.camera.left = -5.5;
+  sun.shadow.camera.right = 5.5;
+  sun.shadow.camera.top = 5.5;
+  sun.shadow.camera.bottom = -5.5;
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.bias = -0.00012;
+  sun.shadow.normalBias = 0.004;
 
   const bounce = new THREE.DirectionalLight(0xffd8b4, 0.45);
   bounce.position.set(1.4, 2.2, 2.4);
