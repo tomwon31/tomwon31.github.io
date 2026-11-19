@@ -1,6 +1,6 @@
 /** Shared measures for the room shell and the street outside the glass. */
 export const LAYOUT = {
-  streetY: -11.2,
+  streetY: -15,
   roomX: 3.58,
   roomZ0: -4.2,
   roomZ1: 2.28,
@@ -9,7 +9,7 @@ export const LAYOUT = {
     z: -4.12,
     x0: -3.06,
     x1: 3.06,
-    y0: 0.4,
+    y0: 0.2,
     y1: 2.74,
   },
 };

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 export const SCREEN_FILL = 0.9;
 
 export const HOME_POS = new THREE.Vector3(0.34, 1.36, 1.78);
-export const HOME_TARGET = new THREE.Vector3(0.0, 1.18, -2.5);
+export const HOME_TARGET = new THREE.Vector3(0.0, 0.84, -2.9);
 export const HOME_FOV = 36;
 
 const YAW_LIM = 0.2;

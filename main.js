@@ -189,7 +189,7 @@ function loop(now) {
     locked: weather.state.lockKind,
   });
   city.paintSky(look);
-  city.update(dt, look.night);
+  city.update(dt, { night: look.night, snow: look.snow, time: elapsed });
   room.update(elapsed);
   rig.update(dt, elapsed);
   if (rig.mode !== lastMode) {
